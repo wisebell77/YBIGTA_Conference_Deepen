@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import type { GraphData, StorageAdapter, StoredFile } from "./types";
+import type { GraphData, PaperSummary, StorageAdapter, StoredFile } from "./types";
 import { createEmptyGraph, DEFAULT_ANALYSIS_SETTINGS } from "./types";
 import { GoogleDriveStorageAdapter } from "./google-drive/storage-adapter";
 
@@ -22,6 +22,10 @@ function projectRoot(projectId: string): string {
 
 function graphPath(projectId: string): string {
   return path.join(projectRoot(projectId), "cache", "graph.json");
+}
+
+function summaryPath(projectId: string, paperId: string): string {
+  return path.join(projectRoot(projectId), "summaries", `${paperId}.summary.json`);
 }
 
 function inferLocalFileId(localFilePath?: string): string | undefined {
@@ -47,6 +51,7 @@ function hydrateGraph(graph: GraphData): GraphData {
 
 async function ensureProjectDirs(projectId: string): Promise<void> {
   await fs.mkdir(path.join(projectRoot(projectId), "papers"), { recursive: true });
+  await fs.mkdir(path.join(projectRoot(projectId), "summaries"), { recursive: true });
   await fs.mkdir(path.join(projectRoot(projectId), "cache"), { recursive: true });
 }
 
@@ -90,6 +95,28 @@ export class LocalStorageAdapter implements StorageAdapter {
     const match = files.find((file) => file.startsWith(`${fileId}_`));
     if (!match) throw new Error("PDF_NOT_FOUND");
     return fs.readFile(path.join(papersDir, match));
+  }
+
+  async writePaperSummary(projectId: string, summary: PaperSummary): Promise<StoredFile> {
+    await ensureProjectDirs(projectId);
+    const target = summaryPath(projectId, summary.paperId);
+    await fs.writeFile(target, `${JSON.stringify(summary, null, 2)}\n`, "utf8");
+    return {
+      id: summary.paperId,
+      filename: path.basename(target),
+      localFilePath: target,
+      size: Buffer.byteLength(JSON.stringify(summary))
+    };
+  }
+
+  async readPaperSummary(projectId: string, paperId: string): Promise<PaperSummary | null> {
+    try {
+      const raw = await fs.readFile(summaryPath(projectId, paperId), "utf8");
+      return JSON.parse(raw) as PaperSummary;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw error;
+    }
   }
 }
 

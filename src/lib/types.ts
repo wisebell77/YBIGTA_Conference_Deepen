@@ -41,6 +41,7 @@ export type PaperNode = {
   year?: number;
   abstract?: string;
   summary: string;
+  summaryFileId?: string;
   shortSummary: string;
   keywords: string[];
   embeddingText: string;
@@ -105,6 +106,26 @@ export type GraphData = {
   analysisSettings: AnalysisSettings;
 };
 
+export type PaperSummary = {
+  schemaVersion: "1.0";
+  paperId: string;
+  projectId: string;
+  title: string;
+  authors: string[];
+  year?: number;
+  abstract?: string;
+  summary: string;
+  shortSummary: string;
+  keywords: string[];
+  embeddingText: string;
+  originalFilename: string;
+  pdfFileId: string;
+  driveFileId?: string;
+  webViewLink?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type StoredFile = {
   id: string;
   filename: string;
@@ -119,6 +140,8 @@ export interface StorageAdapter {
   writeGraph(projectId: string, graph: GraphData): Promise<void>;
   savePdf(projectId: string, file: Buffer, filename: string): Promise<StoredFile>;
   readPdf(projectId: string, fileId: string): Promise<Buffer>;
+  writePaperSummary?(projectId: string, summary: PaperSummary): Promise<StoredFile>;
+  readPaperSummary?(projectId: string, paperId: string): Promise<PaperSummary | null>;
 }
 
 export const DEFAULT_ANALYSIS_SETTINGS: AnalysisSettings = {
