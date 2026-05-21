@@ -23,6 +23,8 @@ function createPaperNode(params: {
     keywords: params.metadata.keywords ?? [],
     embeddingText: params.metadata.embeddingText || params.metadata.summary || params.metadata.title,
     localFileId: params.storedFile.id,
+    driveFileId: params.storedFile.driveFileId,
+    webViewLink: params.storedFile.webViewLink,
     localFilePath: params.storedFile.localFilePath,
     originalFilename: params.originalFilename,
     createdAt: timestamp,

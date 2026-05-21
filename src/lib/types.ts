@@ -46,6 +46,7 @@ export type PaperNode = {
   embeddingText: string;
   localFileId?: string;
   driveFileId?: string;
+  webViewLink?: string;
   localFilePath?: string;
   originalFilename: string;
   createdAt: string;
@@ -108,6 +109,8 @@ export type StoredFile = {
   id: string;
   filename: string;
   localFilePath?: string;
+  driveFileId?: string;
+  webViewLink?: string;
   size: number;
 };
 
@@ -126,14 +129,14 @@ export const DEFAULT_ANALYSIS_SETTINGS: AnalysisSettings = {
 };
 
 export const RELATION_LABELS: Record<RelationType, string> = {
-  extends: "후속/확장",
+  extends: "계승/확장",
   prerequisite: "선행 연구",
   supports: "뒷받침",
   contradicts: "반박",
-  applies: "응용",
+  applies: "적용",
   uses_method: "방법 사용",
   compares_with: "비교",
-  conceptually_related: "개념 연관",
+  conceptually_related: "개념 연결",
   background: "배경 지식",
   unknown: "미분류"
 };

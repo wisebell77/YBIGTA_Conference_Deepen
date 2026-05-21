@@ -2,6 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import type { GraphData, StorageAdapter, StoredFile } from "./types";
 import { createEmptyGraph, DEFAULT_ANALYSIS_SETTINGS } from "./types";
+import { GoogleDriveStorageAdapter } from "./google-drive/storage-adapter";
 
 const DATA_DIR = path.join(process.cwd(), "data", "projects");
 
@@ -92,7 +93,21 @@ export class LocalStorageAdapter implements StorageAdapter {
   }
 }
 
-export const storage = new LocalStorageAdapter();
+export function createStorageAdapter(): StorageAdapter {
+  const backend = process.env.STORAGE_BACKEND ?? "local";
+
+  if (backend === "google_drive") {
+    return new GoogleDriveStorageAdapter();
+  }
+
+  if (backend !== "local") {
+    throw new Error(`UNSUPPORTED_STORAGE_BACKEND:${backend}`);
+  }
+
+  return new LocalStorageAdapter();
+}
+
+export const storage = createStorageAdapter();
 
 export async function readOrCreateGraph(projectId: string): Promise<GraphData> {
   return (await storage.readGraph(projectId)) ?? createEmptyGraph(projectId);

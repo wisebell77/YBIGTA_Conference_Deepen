@@ -11,8 +11,11 @@
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.16",
+    "google-auth-library": "^9.15.1",
+    "googleapis": "^140.0.1",
     "next": "^15.3.2",
     "pdf-parse": "^1.1.1",
+    "pg": "^8.13.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "reactflow": "^11.11.4",
@@ -21,6 +24,7 @@
   "devDependencies": {
     "@types/node": "^22.15.21",
     "@types/pdf-parse": "^1.1.5",
+    "@types/pg": "^8.11.10",
     "@types/react": "^19.1.5",
     "@types/react-dom": "^19.1.5",
     "autoprefixer": "^10.4.21",

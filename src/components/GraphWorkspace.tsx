@@ -34,6 +34,11 @@ type EdgeForm = {
   longDescription: string;
 };
 
+type GoogleAuthStatus = {
+  connected: boolean;
+  user: { email: string; name?: string | null } | null;
+};
+
 const nodeTypes: NodeTypes = { paperNode: PaperNode };
 
 function toReactFlowNodes(graph: GraphData, visibleNodeIds: Set<string>): Node[] {
@@ -86,6 +91,14 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
   const [activeRelations, setActiveRelations] = useState<Set<RelationType>>(new Set());
   const [editing, setEditing] = useState(false);
   const [edgeForm, setEdgeForm] = useState<EdgeForm | null>(null);
+  const [googleAuth, setGoogleAuth] = useState<GoogleAuthStatus | null>(null);
+
+  const loadGoogleAuthStatus = useCallback(async () => {
+    const response = await fetch("/api/auth/google/status");
+    const json = (await response.json()) as { success: boolean } & GoogleAuthStatus;
+    if (!json.success) throw new Error("GOOGLE_AUTH_STATUS_FAILED");
+    setGoogleAuth({ connected: json.connected, user: json.user });
+  }, []);
 
   const loadGraph = useCallback(async () => {
     const response = await fetch(`/api/projects/${projectId}/graph`);
@@ -96,8 +109,9 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
   }, [projectId]);
 
   useEffect(() => {
+    loadGoogleAuthStatus().catch(() => setGoogleAuth({ connected: false, user: null }));
     loadGraph().catch((error) => setStatus((error as Error).message));
-  }, [loadGraph]);
+  }, [loadGraph, loadGoogleAuthStatus]);
 
   const visibleEdges = useMemo(
     () => (graph ? toReactFlowEdges(graph, activeRelations) : []),
@@ -168,6 +182,10 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
     }
   };
 
+  const connectGoogleDrive = () => {
+    window.location.href = `/api/auth/google/start?projectId=${encodeURIComponent(projectId)}`;
+  };
+
   const toggleRelation = (relationType: RelationType) => {
     setActiveRelations((current) => {
       const next = new Set(current);
@@ -235,6 +253,18 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
           <span className="text-sm text-neutral-500">Paper Graph Memory</span>
         </div>
         <div className="flex items-center gap-2">
+          {googleAuth?.connected ? (
+            <div className="max-w-64 truncate border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-600">
+              {googleAuth.user?.email ?? "Google Drive connected"}
+            </div>
+          ) : (
+            <button
+              className="border border-neutral-300 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
+              onClick={connectGoogleDrive}
+            >
+              Connect Google Drive
+            </button>
+          )}
           <label className="cursor-pointer border border-neutral-950 bg-neutral-950 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800">
             {isUploading ? "Analyzing" : "Upload PDF"}
             <input
