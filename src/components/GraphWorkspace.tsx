@@ -81,6 +81,7 @@ type PaperEdgeData = {
 const nodeTypes: NodeTypes = { paperNode: PaperNode };
 const edgeTypes: EdgeTypes = { paperEdge: PaperRelationEdge };
 const DRIVE_UPLOAD_CHUNK_SIZE = 3 * 1024 * 1024;
+const LARGE_PDF_ANALYSIS_MB = 4.5;
 
 type RelationColorMap = Record<RelationType, string>;
 type RelationLineStyleMap = Record<RelationType, EdgeLineStyle>;
@@ -340,6 +341,21 @@ function getPaperTitle(graph: GraphData | null, paperId: string) {
   return graph?.nodes.find((paper) => paper.id === paperId)?.title ?? paperId;
 }
 
+async function readJsonResponse<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  if (!text) return {} as T;
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(
+      response.status === 504
+        ? "ANALYSIS_TIMEOUT: Large PDF analysis exceeded the server time limit."
+        : `INVALID_SERVER_RESPONSE_${response.status}: ${text.slice(0, 160)}`
+    );
+  }
+}
+
 function emptyCreateEdgeForm(graph: GraphData | null): CreateEdgeForm {
   return {
     source: graph?.nodes[0]?.id ?? "",
@@ -524,11 +540,11 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
   };
 
   const applyUploadResponse = async (response: Response) => {
-    const json = (await response.json()) as {
+    const json = await readJsonResponse<{
       success: boolean;
       graph?: GraphData;
       error?: string;
-    };
+    }>(response);
     if (!response.ok || !json.success || !json.graph) {
       throw new Error(json.error ?? `UPLOAD_FAILED_${response.status}`);
     }
@@ -563,7 +579,12 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
     const driveFile = await uploadFileToDriveInChunks(file, session.uploadUrl);
     if (!driveFile.id) throw new Error("DRIVE_UPLOAD_FILE_ID_MISSING");
 
-    setStatus("Analyzing Google Drive PDF");
+    const sizeMb = file.size / 1024 / 1024;
+    setStatus(
+      sizeMb >= LARGE_PDF_ANALYSIS_MB
+        ? "Analyzing Google Drive PDF. Large files can take a few minutes."
+        : "Analyzing Google Drive PDF"
+    );
     const analyzeResponse = await fetch(
       `/api/projects/${projectId}/papers/analyze-drive-file`,
       {

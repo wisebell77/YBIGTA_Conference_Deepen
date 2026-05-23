@@ -3,7 +3,7 @@ import { analyzeDrivePaper } from "@/lib/analyze";
 import { GoogleDriveStorageAdapter } from "@/lib/google-drive/storage-adapter";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(
   request: Request,

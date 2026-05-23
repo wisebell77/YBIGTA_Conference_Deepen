@@ -111,6 +111,8 @@ The upload route should reject non-PDF uploads and files above this size.
 
 In Google Drive mode, the browser asks the server for a Drive resumable upload URL and then sends the PDF to the server in small chunks. Each chunk stays below Vercel's request body limit, and the server forwards the chunk to Google Drive. After Drive returns a `driveFileId`, the analysis route downloads the Drive file as a stream for Upstage Document Parse and falls back to the existing Buffer-based path if stream upload is not accepted.
 
+Large PDFs can take longer than one minute because analysis includes Drive download, Document Parse, Solar metadata extraction, and Solar relation extraction. The upload analysis routes set `maxDuration = 300`; keep Vercel Fluid Compute enabled or set the project Function Max Duration high enough for deployment tests.
+
 ## StorageAdapter
 
 All storage backends must implement:
