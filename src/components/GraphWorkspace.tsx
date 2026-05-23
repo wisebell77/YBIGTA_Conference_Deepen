@@ -53,6 +53,13 @@ type GoogleAuthStatus = {
   user: { email: string; name?: string | null } | null;
 };
 
+type DriveUploadResult = {
+  id?: string;
+  name?: string;
+  size?: string;
+  webViewLink?: string;
+};
+
 type NodeShapeMode = "square" | "circle";
 
 type PaperEdgeData = {
@@ -471,6 +478,11 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
   const pendingSuggestions = graph?.edgeSuggestions.filter((item) => item.status === "pending") ?? [];
 
   const uploadPdf = async (file: File) => {
+    if (file.size <= 0) {
+      setStatus("PDF file is empty");
+      return;
+    }
+
     const duplicate = findPotentialDuplicate(graph, file);
     if (duplicate) {
       const confirmed = window.confirm(
@@ -485,26 +497,88 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
     const formData = new FormData();
     formData.append("file", file);
     setIsUploading(true);
-    setStatus("Uploading PDF and running incremental analysis");
     try {
-      const response = await fetch(`/api/projects/${projectId}/papers/upload`, {
-        method: "POST",
-        body: formData
-      });
-      const json = (await response.json()) as {
-        success: boolean;
-        graph?: GraphData;
-        error?: string;
-      };
-      if (!json.success || !json.graph) throw new Error(json.error ?? "UPLOAD_FAILED");
-      setGraph(json.graph);
-      setSelected(null);
-      setStatus(`Upload complete: ${json.graph.nodes.length} papers, ${json.graph.edges.length} edges`);
+      if (googleAuth?.connected) {
+        await uploadPdfThroughDrive(file);
+      } else {
+        setStatus("Uploading PDF and running incremental analysis");
+        const response = await fetch(`/api/projects/${projectId}/papers/upload`, {
+          method: "POST",
+          body: formData
+        });
+        await applyUploadResponse(response);
+      }
     } catch (error) {
       setStatus((error as Error).message);
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const applyUploadResponse = async (response: Response) => {
+    const json = (await response.json()) as {
+      success: boolean;
+      graph?: GraphData;
+      error?: string;
+    };
+    if (!response.ok || !json.success || !json.graph) {
+      throw new Error(json.error ?? `UPLOAD_FAILED_${response.status}`);
+    }
+    setGraph(json.graph);
+    setSelected(null);
+    setStatus(`Upload complete: ${json.graph.nodes.length} papers, ${json.graph.edges.length} edges`);
+  };
+
+  const uploadPdfThroughDrive = async (file: File) => {
+    setStatus("Preparing Google Drive upload");
+    const sessionResponse = await fetch(
+      `/api/projects/${projectId}/papers/drive-upload-session`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          size: file.size,
+          mimeType: file.type || "application/pdf"
+        })
+      }
+    );
+    const session = (await sessionResponse.json()) as {
+      success: boolean;
+      uploadUrl?: string;
+      error?: string;
+    };
+    if (!sessionResponse.ok || !session.success || !session.uploadUrl) {
+      throw new Error(session.error ?? `DRIVE_UPLOAD_SESSION_FAILED_${sessionResponse.status}`);
+    }
+
+    setStatus("Uploading PDF directly to Google Drive");
+    const driveResponse = await fetch(session.uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.type || "application/pdf",
+        "Content-Range": `bytes 0-${file.size - 1}/${file.size}`
+      },
+      body: file
+    });
+    if (!driveResponse.ok) {
+      const body = await driveResponse.text();
+      throw new Error(`DRIVE_UPLOAD_FAILED: ${body.slice(0, 200) || driveResponse.status}`);
+    }
+
+    const driveFile = (await driveResponse.json()) as DriveUploadResult;
+    if (!driveFile.id) throw new Error("DRIVE_UPLOAD_FILE_ID_MISSING");
+
+    setStatus("Analyzing Google Drive PDF");
+    const analyzeResponse = await fetch(
+      `/api/projects/${projectId}/papers/analyze-drive-file`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ driveFileId: driveFile.id })
+      }
+    );
+    await applyUploadResponse(analyzeResponse);
   };
 
   const connectGoogleDrive = () => {

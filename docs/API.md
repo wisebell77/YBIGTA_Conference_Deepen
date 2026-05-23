@@ -110,6 +110,44 @@ Response:
 }
 ```
 
+### Google Drive direct upload
+
+Production uploads use a two-step Google Drive path when the user is connected:
+
+```http
+POST /api/projects/:projectId/papers/drive-upload-session
+Content-Type: application/json
+```
+
+Request:
+
+```json
+{
+  "filename": "paper.pdf",
+  "size": 123456,
+  "mimeType": "application/pdf"
+}
+```
+
+The response contains a Google Drive resumable `uploadUrl`. The browser sends the PDF directly to that URL, so large PDFs do not pass through the Vercel Function request body.
+
+After Drive returns the uploaded file id:
+
+```http
+POST /api/projects/:projectId/papers/analyze-drive-file
+Content-Type: application/json
+```
+
+Request:
+
+```json
+{
+  "driveFileId": "google-drive-file-id"
+}
+```
+
+The server verifies that the file belongs to the current project folder, streams it to Upstage Document Parse first, falls back to the existing Buffer path if streaming fails, and then runs the normal metadata, summary, relation extraction, and graph merge pipeline.
+
 ### Read PDF
 
 ```http

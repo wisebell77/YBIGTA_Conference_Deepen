@@ -3,6 +3,9 @@ import { analyzeUploadedPaper } from "@/lib/analyze";
 
 const DEFAULT_MAX_MB = 20;
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 export async function POST(request: Request, { params }: { params: Promise<{ projectId: string }> }) {
   try {
     const { projectId } = await params;

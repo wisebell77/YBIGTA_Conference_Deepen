@@ -1,6 +1,7 @@
-import type { EdgeSuggestion, PaperEdge, PaperNode } from "./types";
+import { Readable } from "stream";
+import type { EdgeSuggestion, PaperEdge, PaperNode, StoredFile } from "./types";
 import { extractPaperMetadataAndSummary, extractRelationsWithLLM } from "./llm";
-import { extractTextFromPdf } from "./pdf";
+import { extractTextFromPdf, extractTextFromPdfStream } from "./pdf";
 import { mergeGraph } from "./merge";
 import { readOrCreateGraph, storage } from "./storage";
 import { selectCandidatePapers } from "./candidates";
@@ -67,16 +68,47 @@ export async function analyzeUploadedPaper(params: {
     params.pdfBuffer,
     params.originalFilename
   );
-  const rawText = await extractTextFromPdf(params.pdfBuffer, params.originalFilename);
-  const metadata = await extractPaperMetadataAndSummary({
-    rawText,
+  return analyzeStoredPaper({
+    projectId: params.projectId,
+    storedFile,
     originalFilename: params.originalFilename,
-    storedFile
+    rawText: await extractTextFromPdf(params.pdfBuffer, params.originalFilename)
+  });
+}
+
+export async function analyzeDrivePaper(params: {
+  projectId: string;
+  storedFile: StoredFile;
+  pdfStream: Readable;
+  readPdfBuffer: () => Promise<Buffer>;
+}) {
+  return analyzeStoredPaper({
+    projectId: params.projectId,
+    storedFile: params.storedFile,
+    originalFilename: params.storedFile.filename,
+    rawText: await extractTextFromPdfStream(
+      params.pdfStream,
+      params.storedFile.filename,
+      params.readPdfBuffer
+    )
+  });
+}
+
+async function analyzeStoredPaper(params: {
+  projectId: string;
+  storedFile: StoredFile;
+  originalFilename: string;
+  rawText: string;
+}) {
+  const metadata = await extractPaperMetadataAndSummary({
+    rawText: params.rawText,
+    originalFilename: params.originalFilename,
+    storedFile: params.storedFile
   });
   const newPaper = createPaperNode({
     metadata,
     originalFilename: params.originalFilename,
-    storedFile
+    storedFile: params.storedFile
   });
   const graph = await readOrCreateGraph(params.projectId);
   const candidates = selectCandidatePapers({

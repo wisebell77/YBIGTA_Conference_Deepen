@@ -13,9 +13,11 @@ import {
   findChildFile,
   getDriveClient,
   readDriveFileAsBuffer,
+  readDriveFileAsStream,
   writeGraphJsonFile
 } from "./drive-client";
 import { createGoogleAuthStore, type GoogleAuthStore } from "./auth-store";
+import { getAuthorizedOAuthClient } from "./auth";
 
 export type GoogleDriveProjectFolders = {
   rootFolderId: string;
@@ -28,9 +30,15 @@ export type GoogleDriveProjectFolders = {
 export type DrivePdfInfo = {
   id: string;
   filename: string;
+  size?: number;
   createdTime?: string | null;
   modifiedTime?: string | null;
   webViewLink?: string | null;
+};
+
+export type DriveUploadSession = {
+  uploadUrl: string;
+  filename: string;
 };
 
 export class GoogleDriveStorageAdapter implements StorageAdapter {
@@ -96,6 +104,66 @@ export class GoogleDriveStorageAdapter implements StorageAdapter {
     return readDriveFileAsBuffer(drive, fileId);
   }
 
+  async readPdfStream(projectId: string, fileId: string): Promise<Readable> {
+    const drive = await getDriveClient(this.authStore);
+    const folders = await this.ensureProjectFolders(projectId);
+    await assertPdfBelongsToProject(drive, fileId, folders.papersFolderId);
+    return readDriveFileAsStream(drive, fileId);
+  }
+
+  async getPdfInfo(projectId: string, fileId: string): Promise<StoredFile> {
+    const drive = await getDriveClient(this.authStore);
+    const folders = await this.ensureProjectFolders(projectId);
+    const metadata = await assertPdfBelongsToProject(drive, fileId, folders.papersFolderId);
+
+    return {
+      id: fileId,
+      driveFileId: fileId,
+      filename: metadata.name ?? "paper.pdf",
+      size: Number(metadata.size ?? 0),
+      webViewLink: metadata.webViewLink ?? undefined
+    };
+  }
+
+  async createPdfUploadSession(
+    projectId: string,
+    filename: string,
+    size?: number
+  ): Promise<DriveUploadSession> {
+    const auth = await getAuthorizedOAuthClient(this.authStore);
+    const { token } = await auth.getAccessToken();
+    if (!token) throw new Error("GOOGLE_ACCESS_TOKEN_MISSING");
+
+    const folders = await this.ensureProjectFolders(projectId);
+    const cleanName = sanitizeDriveFilename(filename);
+    const response = await fetch(
+      "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,size,webViewLink",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json; charset=UTF-8",
+          "X-Upload-Content-Type": "application/pdf",
+          ...(size ? { "X-Upload-Content-Length": String(size) } : {})
+        },
+        body: JSON.stringify({
+          name: cleanName,
+          parents: [folders.papersFolderId],
+          mimeType: "application/pdf"
+        })
+      }
+    );
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`DRIVE_UPLOAD_SESSION_FAILED: ${body.slice(0, 500)}`);
+    }
+
+    const uploadUrl = response.headers.get("location");
+    if (!uploadUrl) throw new Error("DRIVE_UPLOAD_SESSION_LOCATION_MISSING");
+    return { uploadUrl, filename: cleanName };
+  }
+
   async ensureProjectFolders(projectId: string): Promise<GoogleDriveProjectFolders> {
     const drive = await getDriveClient(this.authStore);
     const rootFolderId = await ensureChildFolder(drive, "root", ROOT_FOLDER_NAME);
@@ -120,7 +188,7 @@ export class GoogleDriveStorageAdapter implements StorageAdapter {
           "trashed = false",
           `'${folders.papersFolderId}' in parents`
         ].join(" and "),
-        fields: "nextPageToken, files(id, name, createdTime, modifiedTime, webViewLink)",
+        fields: "nextPageToken, files(id, name, size, createdTime, modifiedTime, webViewLink)",
         pageSize: 100,
         pageToken
       });
@@ -133,6 +201,7 @@ export class GoogleDriveStorageAdapter implements StorageAdapter {
       .map((file) => ({
         id: file.id,
         filename: file.name ?? "untitled.pdf",
+        size: Number(file.size ?? 0),
         createdTime: file.createdTime,
         modifiedTime: file.modifiedTime,
         webViewLink: file.webViewLink
@@ -171,10 +240,10 @@ async function assertPdfBelongsToProject(
   drive: drive_v3.Drive,
   fileId: string,
   papersFolderId: string
-): Promise<void> {
+): Promise<drive_v3.Schema$File> {
   const metadata = await drive.files.get({
     fileId,
-    fields: "id, mimeType, parents, trashed"
+    fields: "id, name, size, mimeType, parents, trashed, webViewLink"
   });
 
   if (
@@ -184,4 +253,6 @@ async function assertPdfBelongsToProject(
   ) {
     throw new Error("PDF_NOT_FOUND");
   }
+
+  return metadata.data;
 }

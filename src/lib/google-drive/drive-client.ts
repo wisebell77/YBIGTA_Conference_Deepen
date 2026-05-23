@@ -75,8 +75,16 @@ export async function readDriveFileAsBuffer(
   drive: drive_v3.Drive,
   fileId: string
 ): Promise<Buffer> {
+  const stream = await readDriveFileAsStream(drive, fileId);
+  return streamToBuffer(stream);
+}
+
+export async function readDriveFileAsStream(
+  drive: drive_v3.Drive,
+  fileId: string
+): Promise<Readable> {
   const response = await drive.files.get({ fileId, alt: "media" }, { responseType: "stream" });
-  return streamToBuffer(response.data as Readable);
+  return response.data as Readable;
 }
 
 export async function writeGraphJsonFile(

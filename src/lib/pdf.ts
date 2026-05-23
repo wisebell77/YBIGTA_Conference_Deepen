@@ -1,4 +1,5 @@
 import pdfParse from "pdf-parse";
+import { Readable } from "stream";
 
 type DocumentParseProvider = "local" | "upstage";
 
@@ -105,6 +106,86 @@ async function extractTextWithUpstage(pdfBuffer: Buffer, filename = "paper.pdf")
   return text;
 }
 
+function appendMultipartField(parts: Array<string | Buffer>, boundary: string, name: string, value: string) {
+  parts.push(
+    `--${boundary}\r\n`,
+    `Content-Disposition: form-data; name="${name}"\r\n\r\n`,
+    `${value}\r\n`
+  );
+}
+
+function safeMultipartFilename(filename: string): string {
+  return filename.replace(/[\r\n"]/g, "_") || "paper.pdf";
+}
+
+function upstageMultipartBoundary(): string {
+  return `----deepen-upstage-${crypto.randomUUID().replace(/-/g, "")}`;
+}
+
+async function extractTextWithUpstageStream(
+  pdfStream: Readable,
+  filename = "paper.pdf"
+): Promise<string> {
+  const apiKey = process.env.UPSTAGE_API_KEY;
+  if (!apiKey) throw new Error("UPSTAGE_API_KEY_MISSING");
+
+  const boundary = upstageMultipartBoundary();
+  const body = Readable.from(createUpstageMultipartStreamWithBoundary(pdfStream, filename, boundary));
+  const requestInit = {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": `multipart/form-data; boundary=${boundary}`
+    },
+    body,
+    duplex: "half"
+  } as unknown as RequestInit & { duplex: "half" };
+  const response = await fetch(UPSTAGE_DOCUMENT_PARSE_URL, requestInit);
+
+  if (!response.ok) {
+    const responseBody = await response.text();
+    throw new Error(`UPSTAGE_DOCUMENT_PARSE_STREAM_FAILED: ${responseBody.slice(0, 500)}`);
+  }
+
+  const json = (await response.json()) as unknown;
+  const text = extractDocumentParseText(json);
+  if (!text || text.length < 50) throw new Error("UPSTAGE_DOCUMENT_PARSE_TEXT_TOO_SHORT");
+  return text;
+}
+
+async function* createUpstageMultipartStreamWithBoundary(
+  pdfStream: Readable,
+  filename: string,
+  boundary: string
+) {
+  const initialParts: Array<string | Buffer> = [];
+  appendMultipartField(
+    initialParts,
+    boundary,
+    "model",
+    process.env.UPSTAGE_DOCUMENT_PARSE_MODEL ?? "document-parse"
+  );
+  appendMultipartField(
+    initialParts,
+    boundary,
+    "ocr",
+    process.env.UPSTAGE_DOCUMENT_PARSE_OCR ?? "auto"
+  );
+
+  const outputFormat = process.env.UPSTAGE_DOCUMENT_PARSE_OUTPUT_FORMAT;
+  if (outputFormat) appendMultipartField(initialParts, boundary, "output_format", outputFormat);
+
+  initialParts.push(
+    `--${boundary}\r\n`,
+    `Content-Disposition: form-data; name="document"; filename="${safeMultipartFilename(filename)}"\r\n`,
+    "Content-Type: application/pdf\r\n\r\n"
+  );
+
+  for (const part of initialParts) yield typeof part === "string" ? Buffer.from(part) : part;
+  for await (const chunk of pdfStream) yield Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+  yield Buffer.from(`\r\n--${boundary}--\r\n`);
+}
+
 export async function extractTextFromPdf(pdfBuffer: Buffer, filename = "paper.pdf"): Promise<string> {
   try {
     if (textProvider() === "upstage") {
@@ -119,5 +200,24 @@ export async function extractTextFromPdf(pdfBuffer: Buffer, filename = "paper.pd
     return await extractTextWithPdfParse(pdfBuffer);
   } catch (error) {
     throw new Error("PDF_TEXT_EXTRACTION_FAILED", { cause: error });
+  }
+}
+
+export async function extractTextFromPdfStream(
+  pdfStream: Readable,
+  filename = "paper.pdf",
+  fallbackBuffer?: () => Promise<Buffer>
+): Promise<string> {
+  if (textProvider() !== "upstage") {
+    if (!fallbackBuffer) throw new Error("PDF_STREAM_REQUIRES_BUFFER_FALLBACK");
+    return extractTextFromPdf(await fallbackBuffer(), filename);
+  }
+
+  try {
+    return await extractTextWithUpstageStream(pdfStream, filename);
+  } catch (error) {
+    if (process.env.PDF_TEXT_FALLBACK_TO_LOCAL === "false" && !fallbackBuffer) throw error;
+    if (!fallbackBuffer) throw new Error("PDF_TEXT_EXTRACTION_FAILED", { cause: error });
+    return extractTextFromPdf(await fallbackBuffer(), filename);
   }
 }
