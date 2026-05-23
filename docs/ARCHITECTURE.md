@@ -38,8 +38,8 @@ Pipeline:
 
 ```text
 1. Save PDF through storage adapter.
-2. Extract raw text from PDF.
-3. Extract paper metadata and summary.
+2. Extract raw text from PDF with the configured parser.
+3. Extract paper metadata and summary with the configured LLM provider.
 4. Read or create graph.
 5. Select candidate papers from existing graph nodes.
 6. Ask LLM for relations between new paper and candidates.
@@ -86,7 +86,9 @@ Important point: the rest of the app should not call Drive APIs directly. It sho
 
 ### `src/lib/pdf.ts`
 
-Extracts text from uploaded PDF buffers.
+Extracts text from uploaded PDF buffers. `PDF_TEXT_PROVIDER=local` uses `pdf-parse`.
+`PDF_TEXT_PROVIDER=upstage` calls Upstage Document Parse and can fall back to the
+local parser when `PDF_TEXT_FALLBACK_TO_LOCAL=true`.
 
 ### `src/lib/llm.ts`
 
@@ -95,7 +97,9 @@ Calls the LLM for:
 - paper metadata and summary
 - paper-to-paper relation extraction
 
-Also contains fallback behavior for local development when no API key is present.
+`LLM_PROVIDER=upstage` uses Solar through Upstage's OpenAI-compatible Chat API.
+`LLM_PROVIDER=openai` keeps the previous OpenAI path for comparison. The module
+also contains fallback behavior for local development when no provider key is present.
 
 ### `src/lib/candidates.ts`
 
@@ -128,6 +132,8 @@ Critical rules:
 - turn conflicts into suggestions
 - apply confidence thresholds
 - update `updatedAt`
+- delete user-created or generated edges by id
+- delete paper nodes from graph memory while preserving original PDFs
 
 ### `src/components/GraphWorkspace.tsx`
 
@@ -137,15 +143,19 @@ Responsibilities:
 
 - fetch graph
 - upload PDF
+- warn on likely duplicate uploads
 - filter papers and relations
 - render React Flow graph
 - render custom edge labels/arrows
 - show hover explanations
 - edit edges
+- delete edges
+- delete paper nodes from graph memory
 - create custom edges
 - accept/reject suggestions
 - resize side panels
 - toggle node shape mode
+- log out of the local Google Drive session
 
 ### `src/components/PaperNode.tsx`
 

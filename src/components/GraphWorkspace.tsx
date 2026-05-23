@@ -299,6 +299,28 @@ function formatAuthors(authors: string[]) {
   return authors.length ? authors.join(", ") : "Unknown authors";
 }
 
+function normalizeDuplicateKey(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/\.pdf$/i, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/[^a-z0-9가-힣\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findPotentialDuplicate(graph: GraphData | null, file: File): PaperNodeType | null {
+  if (!graph) return null;
+  const fileKey = normalizeDuplicateKey(file.name);
+  if (!fileKey) return null;
+
+  return (
+    graph.nodes.find((paper) => normalizeDuplicateKey(paper.originalFilename) === fileKey) ??
+    graph.nodes.find((paper) => normalizeDuplicateKey(paper.title) === fileKey) ??
+    null
+  );
+}
+
 function getPaperTitle(graph: GraphData | null, paperId: string) {
   return graph?.nodes.find((paper) => paper.id === paperId)?.title ?? paperId;
 }
@@ -449,6 +471,17 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
   const pendingSuggestions = graph?.edgeSuggestions.filter((item) => item.status === "pending") ?? [];
 
   const uploadPdf = async (file: File) => {
+    const duplicate = findPotentialDuplicate(graph, file);
+    if (duplicate) {
+      const confirmed = window.confirm(
+        `A paper with the same filename or title may already exist:\n\n${duplicate.title}\n\nUpload anyway?`
+      );
+      if (!confirmed) {
+        setStatus("Upload canceled because a potential duplicate was found");
+        return;
+      }
+    }
+
     const formData = new FormData();
     formData.append("file", file);
     setIsUploading(true);
@@ -476,6 +509,17 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
 
   const connectGoogleDrive = () => {
     window.location.href = `/api/auth/google/start?projectId=${encodeURIComponent(projectId)}`;
+  };
+
+  const logoutGoogleDrive = async () => {
+    const response = await fetch("/api/auth/google/logout", { method: "POST" });
+    const json = (await response.json()) as { success: boolean; error?: string };
+    if (!json.success) {
+      setStatus(json.error ?? "GOOGLE_LOGOUT_FAILED");
+      return;
+    }
+    setGoogleAuth({ connected: false, user: null });
+    setStatus("Google Drive disconnected");
   };
 
   const toggleRelation = (relationType: RelationType) => {
@@ -529,6 +573,49 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
     setSelected({ kind: "edge", edge: json.edge });
     setEditing(false);
     setStatus("Edge update saved permanently");
+  };
+
+  const deleteSelectedEdge = async () => {
+    if (selected?.kind !== "edge") return;
+    const confirmed = window.confirm("Delete this edge from graph.json?");
+    if (!confirmed) return;
+
+    const response = await fetch(`/api/projects/${projectId}/edges/${selected.edge.id}`, {
+      method: "DELETE"
+    });
+    const json = (await response.json()) as { success: boolean; graph?: GraphData; error?: string };
+    if (!json.success || !json.graph) {
+      setStatus(json.error ?? "EDGE_DELETE_FAILED");
+      return;
+    }
+
+    setGraph(json.graph);
+    setSelected(null);
+    setEditing(false);
+    setStatus("Edge deleted permanently");
+  };
+
+  const deleteSelectedPaper = async () => {
+    if (selected?.kind !== "paper") return;
+    const connectedCount = selectedPaperEdges.length;
+    const confirmed = window.confirm(
+      `Delete this paper node from graph.json?\n\n${selected.paper.title}\n\n${connectedCount} connected edge(s) will also be removed. The original PDF file will stay in storage.`
+    );
+    if (!confirmed) return;
+
+    const response = await fetch(`/api/projects/${projectId}/papers/${selected.paper.id}`, {
+      method: "DELETE"
+    });
+    const json = (await response.json()) as { success: boolean; graph?: GraphData; error?: string };
+    if (!json.success || !json.graph) {
+      setStatus(json.error ?? "PAPER_DELETE_FAILED");
+      return;
+    }
+
+    setGraph(json.graph);
+    setSelected(null);
+    setEditing(false);
+    setStatus("Paper node deleted. Original PDF file was not deleted.");
   };
 
   const createEdgeFromForm = useCallback(async (
@@ -718,9 +805,17 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
         </div>
         <div className="flex items-center gap-2">
           {googleAuth?.connected ? (
-            <div className="max-w-64 truncate border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-600">
-              {googleAuth.user?.email ?? "Google Drive connected"}
-            </div>
+            <>
+              <div className="max-w-64 truncate border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-600">
+                {googleAuth.user?.email ?? "Google Drive connected"}
+              </div>
+              <button
+                className="border border-neutral-300 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
+                onClick={() => void logoutGoogleDrive()}
+              >
+                Logout
+              </button>
+            </>
           ) : (
             <button
               className="border border-neutral-300 bg-white px-3 py-1.5 text-sm hover:bg-neutral-100"
@@ -1102,6 +1197,17 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
                   )}
                 </div>
               </div>
+              <div className="border-t border-neutral-200 pt-4">
+                <button
+                  className="border border-red-700 bg-white px-3 py-2 text-sm text-red-700 hover:bg-red-50"
+                  onClick={() => void deleteSelectedPaper()}
+                >
+                  Delete Paper Node
+                </button>
+                <p className="mt-2 text-xs leading-relaxed text-neutral-500">
+                  Removes this paper and connected edges from graph.json. The original PDF file is kept.
+                </p>
+              </div>
             </div>
           )}
 
@@ -1138,6 +1244,12 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
                     onClick={() => startEdgeEdit(selected.edge)}
                   >
                     Edit
+                  </button>
+                  <button
+                    className="ml-2 border border-red-700 bg-white px-3 py-2 text-sm text-red-700 hover:bg-red-50"
+                    onClick={() => void deleteSelectedEdge()}
+                  >
+                    Delete
                   </button>
                 </>
               )}

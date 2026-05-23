@@ -7,7 +7,7 @@ STORAGE_BACKEND=google_drive
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
-GOOGLE_AUTH_FILE=./data/tokens/google-auth.json
+GOOGLE_AUTH_FILE=./local_data/tokens/google-auth.json
 ```
 
 Start OAuth at:
@@ -39,7 +39,7 @@ intended for first import, manual sync, or recovery when `graph.json` is missing
 For local development, OAuth users, refresh tokens, and sessions are stored in:
 
 ```text
-./data/tokens/google-auth.json
+./local_data/tokens/google-auth.json
 ```
 
 For shared deployments, set `DATABASE_URL` to a Postgres database. The app will
@@ -54,3 +54,19 @@ deepen_sessions
 Each browser session is tied to its own Google account, so different teammates
 can connect different Drives and see their own `/Deepen/projects/{projectId}`
 graph data.
+
+## Vercel deployment
+
+Use Google Drive storage plus Postgres-backed OAuth storage:
+
+```env
+STORAGE_BACKEND=google_drive
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=https://your-domain/api/auth/google/callback
+DATABASE_URL=postgresql://...
+DATABASE_SSL=true
+```
+
+The Vercel production callback URL must also be registered in the Google OAuth
+client's authorized redirect URIs.

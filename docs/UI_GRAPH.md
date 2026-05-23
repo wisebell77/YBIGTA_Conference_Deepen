@@ -64,6 +64,7 @@ Current behavior:
 - directed edges use a small SVG marker arrow
 - hover shows a floating explanation panel
 - click opens the edge detail panel
+- detail panel can delete an edge after confirmation
 - dragging from one paper node handle to another creates a user-defined edge immediately
 - edge paths use curved quadratic paths with per-edge offsets so dense labels and parallel edges separate better
 - label placement uses an offset normal to the curved path instead of sitting directly on the line
@@ -162,6 +163,23 @@ llmGenerated = false
 ```
 
 Users can also create an edge by dragging from a source handle to another paper. The UI immediately saves a `custom` edge, selects it, and opens the right panel in edit mode so the relation type, label, and descriptions can be corrected.
+
+## Paper Deletion And Duplicate Warnings
+
+Clicking a paper opens the right detail panel. The panel includes a destructive
+`Delete Paper Node` action. It removes the paper from `graph.json` along with
+connected edges and related suggestions, but it does not delete the original PDF
+from local storage or Google Drive.
+
+Before upload, the UI checks the current graph for a paper with the same original
+filename or a title matching the PDF filename without `.pdf`. If a likely
+duplicate exists, the user must confirm before upload continues.
+
+## Google Drive Session
+
+When Google Drive is connected, the header shows the connected email and a
+`Logout` button. Logout clears the local app session cookie; it does not delete
+Drive files, graph data, or stored OAuth tokens.
 
 ## Large Paper Lists
 

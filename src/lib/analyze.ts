@@ -67,7 +67,7 @@ export async function analyzeUploadedPaper(params: {
     params.pdfBuffer,
     params.originalFilename
   );
-  const rawText = await extractTextFromPdf(params.pdfBuffer);
+  const rawText = await extractTextFromPdf(params.pdfBuffer, params.originalFilename);
   const metadata = await extractPaperMetadataAndSummary({
     rawText,
     originalFilename: params.originalFilename,

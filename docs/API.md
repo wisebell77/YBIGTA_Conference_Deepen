@@ -29,6 +29,9 @@ Used by:
 - reload button
 - post-write refresh flows
 
+If Google Drive mode is enabled but the browser has not connected a Drive
+account yet, this route returns an empty graph shape instead of a server error.
+
 ### Update graph UI settings
 
 ```http
@@ -123,6 +126,20 @@ In local mode, `fileId` is `PaperNode.localFileId`.
 
 In Google Drive mode, it maps to the Drive file id through the storage adapter.
 
+### Delete paper node
+
+```http
+DELETE /api/projects/:projectId/papers/:paperId
+```
+
+Behavior:
+
+- removes the paper node from `graph.json`
+- removes connected edges
+- removes suggestions that reference that paper
+- removes saved node position
+- does not delete the original PDF file from local storage or Google Drive
+
 ## Edges
 
 ### Create user edge
@@ -196,6 +213,19 @@ Behavior:
 - updates `updatedAt`
 - writes graph
 - returns updated edge and graph
+
+### Delete edge
+
+```http
+DELETE /api/projects/:projectId/edges/:edgeId
+```
+
+Behavior:
+
+- removes the edge from `graph.json`
+- removes suggestions targeting that edge
+- writes graph
+- does not modify source paper nodes or PDFs
 
 ## Edge Suggestions
 

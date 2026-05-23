@@ -27,3 +27,6 @@ This folder is the handoff packet for collaborators. It explains what has been b
 - LLM conflicts must become suggestions, not destructive updates.
 - Local mode uses `local_data/` as the Drive replacement.
 - React Flow custom nodes must keep their handles or edges can disappear.
+- Deleting a paper node must not delete the original PDF file.
+- Production uses Upstage Document Parse and Solar Pro 3 by default.
+- Vercel deployments must use Postgres-backed OAuth token/session storage.

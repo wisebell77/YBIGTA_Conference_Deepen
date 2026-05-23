@@ -22,8 +22,12 @@ Implemented features:
 - Edge hover explanation
 - Edge detail panel
 - Edge editing with permanent persistence
+- Edge deletion with permanent persistence
 - User-defined edge creation
 - User-defined edge creation by dragging between node handles
+- Paper node deletion from graph memory without deleting source PDFs
+- Duplicate upload warning by filename/title
+- Google Drive logout button
 - Relation filter rows with color and line-style controls
 - Persisted graph UI settings in `graph.json`
 - Optional edge-label hiding for dense graphs
@@ -33,6 +37,8 @@ Implemented features:
 - Large paper-list modal after the first 10 sidebar papers
 - Edge suggestion accept/reject endpoints
 - Local seed data generation from `../data_papers`
+- Upstage Document Parse PDF text extraction
+- Upstage Solar Pro 3 metadata/summary/relation extraction
 
 ## First Setup On Another PC
 
@@ -83,6 +89,8 @@ Use Google Drive mode only when OAuth and Drive access are ready:
 
 ```env
 STORAGE_BACKEND=google_drive
+DATABASE_URL=...
+DATABASE_SSL=true
 ```
 
 ## Local Demo Data
@@ -173,5 +181,6 @@ Look for:
 - Keep storage access behind `StorageAdapter`.
 - Keep API writes responsible for persistence.
 - Keep local data and real secrets out of git.
+- Keep original PDFs when deleting graph paper nodes unless product requirements change.
 - Store graph UI preferences in `GraphData.uiSettings`, not in component-only state.
 - Use the dense graph controls before changing the domain data model: hide edge labels, tune line styles, move nodes, or reset positions.

@@ -211,6 +211,42 @@ export function createUserEdge(
   };
 }
 
+export function deleteEdge(graph: GraphData, edgeId: string): GraphData {
+  const edgeExists = graph.edges.some((edge) => edge.id === edgeId);
+  if (!edgeExists) throw new Error("EDGE_NOT_FOUND");
+
+  return {
+    ...graph,
+    edges: graph.edges.filter((edge) => edge.id !== edgeId),
+    edgeSuggestions: graph.edgeSuggestions.filter((suggestion) => suggestion.targetEdgeId !== edgeId),
+    updatedAt: now()
+  };
+}
+
+export function deletePaperNode(graph: GraphData, paperId: string): GraphData {
+  const nodeExists = graph.nodes.some((node) => node.id === paperId);
+  if (!nodeExists) throw new Error("PAPER_NOT_FOUND");
+
+  const nodePositions = { ...(graph.uiSettings?.nodePositions ?? {}) };
+  delete nodePositions[paperId];
+
+  return {
+    ...graph,
+    nodes: graph.nodes.filter((node) => node.id !== paperId),
+    edges: graph.edges.filter((edge) => edge.source !== paperId && edge.target !== paperId),
+    edgeSuggestions: graph.edgeSuggestions.filter(
+      (suggestion) => suggestion.source !== paperId && suggestion.target !== paperId
+    ),
+    uiSettings: graph.uiSettings
+      ? {
+          ...graph.uiSettings,
+          nodePositions
+        }
+      : graph.uiSettings,
+    updatedAt: now()
+  };
+}
+
 export function acceptSuggestion(graph: GraphData, suggestionId: string): GraphData {
   const timestamp = now();
   const suggestion = graph.edgeSuggestions.find((item) => item.id === suggestionId);

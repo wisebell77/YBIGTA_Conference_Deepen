@@ -21,9 +21,12 @@ new PDF
 - Tailwind CSS
 - React Flow
 - pdf-parse
+- Upstage Document Parse
+- Upstage Solar Pro 3
 - OpenAI-compatible LLM calls
 - Local JSON/PDF storage
-- Google Drive storage adapter skeleton
+- Google Drive storage adapter
+- Postgres-backed OAuth token/session storage for deployment
 
 ## Quick Start
 
@@ -67,8 +70,13 @@ Use `.env.example` only as the shared template. Do not put real secrets in `.env
 Minimal local development config:
 
 ```env
-OPENAI_API_KEY=
-LLM_MODEL=gpt-4.1-mini
+LLM_PROVIDER=upstage
+UPSTAGE_API_KEY=
+UPSTAGE_BASE_URL=https://api.upstage.ai/v1
+LLM_MODEL=solar-pro3
+PDF_TEXT_PROVIDER=upstage
+PDF_TEXT_FALLBACK_TO_LOCAL=true
+UPSTAGE_DOCUMENT_PARSE_OUTPUT_FORMAT=markdown
 MAX_UPLOAD_MB=20
 STORAGE_BACKEND=local
 LOCAL_STORAGE_ROOT=./local_data
@@ -82,6 +90,14 @@ STORAGE_BACKEND=google_drive
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
+```
+
+For Vercel production, also set:
+
+```env
+DATABASE_URL=postgresql://...
+DATABASE_SSL=true
+GOOGLE_REDIRECT_URI=https://your-domain/api/auth/google/callback
 ```
 
 ## Scripts
@@ -138,8 +154,10 @@ local_data/
 - `GET /api/projects/:projectId/graph`
 - `POST /api/projects/:projectId/papers/upload`
 - `GET /api/projects/:projectId/papers/:fileId`
+- `DELETE /api/projects/:projectId/papers/:fileId`
 - `POST /api/projects/:projectId/edges`
 - `PATCH /api/projects/:projectId/edges/:edgeId`
+- `DELETE /api/projects/:projectId/edges/:edgeId`
 - `POST /api/projects/:projectId/edge-suggestions/:suggestionId/accept`
 - `POST /api/projects/:projectId/edge-suggestions/:suggestionId/reject`
 - `GET /api/auth/google/start`
@@ -157,6 +175,8 @@ local_data/
 - `userEdited=true` edges must never be overwritten by LLM output.
 - Conflicting LLM output becomes an `edgeSuggestion`.
 - User-created or user-edited edges are permanently saved to `graph.json`.
+- Deleting a paper removes only graph memory for that paper and connected edges; original PDFs are preserved.
+- Duplicate-looking uploads should warn before analysis instead of silently creating another node.
 - UI stays grayscale/monochrome first.
 - React Flow requires source/target handles on custom nodes; removing them can make edges disappear.
 - Edge colors, line styles, node shape, edge label visibility, free-move mode, and node positions are persisted in `graph.json` under `uiSettings`.

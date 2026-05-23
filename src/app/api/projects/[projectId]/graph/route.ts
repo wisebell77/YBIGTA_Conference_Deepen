@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readOrCreateGraph, storage } from "@/lib/storage";
 import {
+  createEmptyGraph,
   RELATION_TYPES,
   type EdgeLineStyle,
   type GraphUiSettings,
@@ -9,8 +10,15 @@ import {
 
 export async function GET(_: Request, { params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
-  const graph = await readOrCreateGraph(projectId);
-  return NextResponse.json({ success: true, graph });
+  try {
+    const graph = await readOrCreateGraph(projectId);
+    return NextResponse.json({ success: true, graph });
+  } catch (error) {
+    if ((error as Error).message === "GOOGLE_DRIVE_NOT_CONNECTED") {
+      return NextResponse.json({ success: true, graph: createEmptyGraph(projectId) });
+    }
+    throw error;
+  }
 }
 
 function isHexColor(value: unknown): value is string {

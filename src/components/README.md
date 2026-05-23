@@ -11,6 +11,7 @@ Responsibilities:
 - load graph
 - upload PDFs
 - connect Google Drive
+- log out from the local Google Drive session
 - render React Flow
 - convert `GraphData` into React Flow nodes/edges
 - filter by relation type
@@ -18,12 +19,15 @@ Responsibilities:
 - toggle square/circle node mode
 - show edge hover explanations
 - edit existing edges
+- delete edges
+- delete paper nodes from graph memory without deleting source PDFs
 - create user-defined edges
 - create user-defined edges by dragging between React Flow handles
 - configure relation edge colors from the left sidebar
 - hide/show edge label pills from the settings panel
 - toggle node free-move mode and persist node positions
 - accept/reject suggestions
+- warn before uploading a likely duplicate PDF
 
 Important custom edge pieces:
 
@@ -37,6 +41,9 @@ Important custom edge pieces:
 - `saveNodePosition`
 - `resetNodePositions`
 - `relationLineStyles`
+- `findPotentialDuplicate`
+- `deleteSelectedPaper`
+- `deleteSelectedEdge`
 
 ## Dense Graph Label Strategy
 
@@ -63,3 +70,10 @@ Current handles:
 - source handle on the right
 
 Do not remove those handles unless the edge rendering strategy is replaced.
+
+## Deletion UX
+
+Deleting an edge or paper uses a browser confirmation dialog before calling the API.
+Paper deletion removes the node, connected edges, related suggestions, and saved
+node position from `graph.json`. The original PDF remains in local storage or
+Google Drive.

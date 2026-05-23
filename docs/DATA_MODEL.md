@@ -192,3 +192,17 @@ Rules:
 - `updatedAt` is refreshed after merge.
 
 For undirected edges, reversed source/target should be treated as the same pair.
+
+## Deletion Rules
+
+Edge deletion removes only the edge and suggestions that target that edge.
+
+Paper node deletion removes:
+
+- the paper node
+- every edge connected to that paper
+- every suggestion whose source or target is that paper
+- the saved node position for that paper
+
+Paper node deletion intentionally does not delete the original PDF file from
+local storage or Google Drive.

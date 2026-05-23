@@ -65,12 +65,41 @@ The Google Drive adapter should keep the same project layout concept:
 
 ## LLM Settings
 
+Default deployment target is Upstage:
+
 ```env
-OPENAI_API_KEY=
+LLM_PROVIDER=upstage
+UPSTAGE_API_KEY=...
+UPSTAGE_BASE_URL=https://api.upstage.ai/v1
+LLM_MODEL=solar-pro3
+LLM_RESPONSE_FORMAT_JSON=true
+```
+
+For OpenAI comparison, use:
+
+```env
+LLM_PROVIDER=openai
+OPENAI_API_KEY=...
+OPENAI_BASE_URL=https://api.openai.com/v1
 LLM_MODEL=gpt-4.1-mini
 ```
 
-If `OPENAI_API_KEY` is missing, local fallback behavior allows development of the upload/merge/UI flow without paid LLM calls.
+If the selected provider key is missing, local fallback behavior allows development of the upload/merge/UI flow without paid LLM calls.
+
+## PDF Text Extraction
+
+Local mode uses `pdf-parse`. To use Upstage Document Parse before Solar analysis:
+
+```env
+PDF_TEXT_PROVIDER=upstage
+PDF_TEXT_FALLBACK_TO_LOCAL=true
+UPSTAGE_DOCUMENT_PARSE_URL=https://api.upstage.ai/v1/document-digitization
+UPSTAGE_DOCUMENT_PARSE_MODEL=document-parse
+UPSTAGE_DOCUMENT_PARSE_OCR=auto
+UPSTAGE_DOCUMENT_PARSE_OUTPUT_FORMAT=markdown
+```
+
+`PDF_TEXT_FALLBACK_TO_LOCAL=true` keeps uploads usable if Document Parse fails or a document contains content that is better handled by the existing local parser. Use `UPSTAGE_DOCUMENT_PARSE_OCR=force` for scanned PDFs.
 
 ## Upload Limit
 
