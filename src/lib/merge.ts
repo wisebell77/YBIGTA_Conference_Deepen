@@ -1,4 +1,5 @@
 import type { EdgeSuggestion, GraphData, PaperEdge, PaperNode } from "./types";
+import type { DirectionMeaning, RelationType } from "./types";
 
 function now(): string {
   return new Date().toISOString();
@@ -142,6 +143,71 @@ export function applyEdgeUpdate(
   return {
     graph: { ...graph, edges, updatedAt: timestamp },
     edge: updatedEdge
+  };
+}
+
+export function createUserEdge(
+  graph: GraphData,
+  input: {
+    source: string;
+    target: string;
+    directed: boolean;
+    directionMeaning?: DirectionMeaning;
+    relationType: RelationType;
+    label: string;
+    shortDescription: string;
+    longDescription: string;
+  }
+): { graph: GraphData; edge: PaperEdge } {
+  const timestamp = now();
+  const nodeIds = new Set(graph.nodes.map((node) => node.id));
+  if (!nodeIds.has(input.source) || !nodeIds.has(input.target)) {
+    throw new Error("INVALID_EDGE_ENDPOINT");
+  }
+  if (input.source === input.target) {
+    throw new Error("SELF_EDGE_NOT_ALLOWED");
+  }
+
+  const edge: PaperEdge = {
+    id: `edge_${crypto.randomUUID()}`,
+    source: input.source,
+    target: input.target,
+    directed: input.directed,
+    directionMeaning:
+      input.directionMeaning ??
+      (input.directed ? "knowledge_flow" : "undirected_conceptual_similarity"),
+    relationType: input.relationType,
+    label: input.label,
+    shortDescription: input.shortDescription,
+    longDescription: input.longDescription,
+    relationSource: "user_created",
+    confidence: 1,
+    evidence: [
+      {
+        paperId: input.source,
+        type: "llm_reasoning",
+        text: "User-created relationship."
+      },
+      {
+        paperId: input.target,
+        type: "llm_reasoning",
+        text: "User-created relationship."
+      }
+    ],
+    llmGenerated: false,
+    userEdited: true,
+    locked: false,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+
+  return {
+    graph: {
+      ...graph,
+      edges: [...graph.edges, edge],
+      updatedAt: timestamp
+    },
+    edge
   };
 }
 
