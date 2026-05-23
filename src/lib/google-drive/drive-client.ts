@@ -111,44 +111,6 @@ export async function writeGraphJsonFile(
   return created.data.id;
 }
 
-export async function writeJsonFileByName(params: {
-  drive: drive_v3.Drive;
-  parentId: string;
-  filename: string;
-  value: unknown;
-}): Promise<string> {
-  const body = Readable.from([Buffer.from(JSON.stringify(params.value, null, 2))]);
-  const existing = await findChildFile(
-    params.drive,
-    params.parentId,
-    params.filename,
-    "application/json"
-  );
-
-  if (existing?.id) {
-    const updated = await params.drive.files.update({
-      fileId: existing.id,
-      media: { mimeType: "application/json", body },
-      fields: "id"
-    });
-    if (!updated.data.id) throw new Error("DRIVE_JSON_UPDATE_FAILED");
-    return updated.data.id;
-  }
-
-  const created = await params.drive.files.create({
-    requestBody: {
-      name: params.filename,
-      parents: [params.parentId],
-      mimeType: "application/json"
-    },
-    media: { mimeType: "application/json", body },
-    fields: "id"
-  });
-
-  if (!created.data.id) throw new Error("DRIVE_JSON_CREATE_FAILED");
-  return created.data.id;
-}
-
 function escapeDriveQueryValue(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }

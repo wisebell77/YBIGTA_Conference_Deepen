@@ -1,10 +1,11 @@
-import { promises as fs } from "fs";
+import { mkdir, readFile, readdir, writeFile, copyFile } from "fs/promises";
 import path from "path";
-import type { GraphData, PaperSummary, StorageAdapter, StoredFile } from "./types";
+import type { GraphData, StorageAdapter, StoredFile } from "./types";
 import { createEmptyGraph, DEFAULT_ANALYSIS_SETTINGS } from "./types";
 import { GoogleDriveStorageAdapter } from "./google-drive/storage-adapter";
 
-const DATA_DIR = path.join(process.cwd(), "data", "projects");
+const LOCAL_STORAGE_ROOT = path.resolve(process.cwd(), process.env.LOCAL_STORAGE_ROOT ?? "local_data");
+const DATA_DIR = path.join(LOCAL_STORAGE_ROOT, "projects");
 
 function sanitizeProjectId(projectId: string): string {
   return projectId.replace(/[^a-zA-Z0-9_-]/g, "-") || "demo-project";
@@ -24,10 +25,6 @@ function graphPath(projectId: string): string {
   return path.join(projectRoot(projectId), "cache", "graph.json");
 }
 
-function summaryPath(projectId: string, paperId: string): string {
-  return path.join(projectRoot(projectId), "summaries", `${paperId}.summary.json`);
-}
-
 function inferLocalFileId(localFilePath?: string): string | undefined {
   if (!localFilePath) return undefined;
   const filename = path.basename(localFilePath);
@@ -45,20 +42,28 @@ function hydrateGraph(graph: GraphData): GraphData {
     analysisSettings: {
       ...DEFAULT_ANALYSIS_SETTINGS,
       ...graph.analysisSettings
+    },
+    uiSettings: {
+      nodeShapeMode: graph.uiSettings?.nodeShapeMode ?? "square",
+      showEdgeLabels: graph.uiSettings?.showEdgeLabels ?? true,
+      freeMoveMode: graph.uiSettings?.freeMoveMode ?? false,
+      nodePositions: graph.uiSettings?.nodePositions ?? {},
+      ...graph.uiSettings,
+      edgeColors: graph.uiSettings?.edgeColors ?? {},
+      edgeLineStyles: graph.uiSettings?.edgeLineStyles ?? {}
     }
   };
 }
 
 async function ensureProjectDirs(projectId: string): Promise<void> {
-  await fs.mkdir(path.join(projectRoot(projectId), "papers"), { recursive: true });
-  await fs.mkdir(path.join(projectRoot(projectId), "summaries"), { recursive: true });
-  await fs.mkdir(path.join(projectRoot(projectId), "cache"), { recursive: true });
+  await mkdir(path.join(projectRoot(projectId), "papers"), { recursive: true });
+  await mkdir(path.join(projectRoot(projectId), "cache"), { recursive: true });
 }
 
 export class LocalStorageAdapter implements StorageAdapter {
   async readGraph(projectId: string): Promise<GraphData | null> {
     try {
-      const raw = await fs.readFile(graphPath(projectId), "utf8");
+      const raw = await readFile(graphPath(projectId), "utf8");
       const graph = JSON.parse(raw) as GraphData;
       return hydrateGraph(graph);
     } catch (error) {
@@ -72,11 +77,11 @@ export class LocalStorageAdapter implements StorageAdapter {
     const target = graphPath(projectId);
     const backup = `${target}.bak`;
     try {
-      await fs.copyFile(target, backup);
+      await copyFile(target, backup);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
-    await fs.writeFile(target, `${JSON.stringify(graph, null, 2)}\n`, "utf8");
+    await writeFile(target, `${JSON.stringify(graph, null, 2)}\n`, "utf8");
   }
 
   async savePdf(projectId: string, file: Buffer, filename: string): Promise<StoredFile> {
@@ -85,38 +90,16 @@ export class LocalStorageAdapter implements StorageAdapter {
     const cleanName = sanitizeFilename(filename);
     const storedName = `${id}_${cleanName}`;
     const localFilePath = path.join(projectRoot(projectId), "papers", storedName);
-    await fs.writeFile(localFilePath, file);
+    await writeFile(localFilePath, file);
     return { id, filename: storedName, localFilePath, size: file.byteLength };
   }
 
   async readPdf(projectId: string, fileId: string): Promise<Buffer> {
     const papersDir = path.join(projectRoot(projectId), "papers");
-    const files = await fs.readdir(papersDir);
+    const files = await readdir(papersDir);
     const match = files.find((file) => file.startsWith(`${fileId}_`));
     if (!match) throw new Error("PDF_NOT_FOUND");
-    return fs.readFile(path.join(papersDir, match));
-  }
-
-  async writePaperSummary(projectId: string, summary: PaperSummary): Promise<StoredFile> {
-    await ensureProjectDirs(projectId);
-    const target = summaryPath(projectId, summary.paperId);
-    await fs.writeFile(target, `${JSON.stringify(summary, null, 2)}\n`, "utf8");
-    return {
-      id: summary.paperId,
-      filename: path.basename(target),
-      localFilePath: target,
-      size: Buffer.byteLength(JSON.stringify(summary))
-    };
-  }
-
-  async readPaperSummary(projectId: string, paperId: string): Promise<PaperSummary | null> {
-    try {
-      const raw = await fs.readFile(summaryPath(projectId, paperId), "utf8");
-      return JSON.parse(raw) as PaperSummary;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
-      throw error;
-    }
+    return readFile(path.join(papersDir, match));
   }
 }
 

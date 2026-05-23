@@ -1,29 +1,36 @@
-# lib
+# `src/lib` Module Notes
 
-Core business logic shared by route handlers. This is where most non-UI behavior should live.
+This folder contains domain logic and server-side helpers. UI components should not reimplement this logic.
 
-Key files:
+## Files
 
-- `types.ts`: graph schema, relation enums, labels, style constants, and storage adapter interface
-- `storage.ts`: storage adapter selection and local storage implementation
-- `analyze.ts`: upload analysis pipeline orchestration
-- `pdf.ts`: PDF text extraction
-- `llm.ts`: metadata and relation extraction prompts/fallbacks
-- `candidates.ts`: candidate paper selection
-- `merge.ts`: incremental graph merge and edge/suggestion updates
-- `graph-validation.ts`: normalization and validation of relation extraction results
-- `google-drive/`: Google OAuth, Drive client, and Drive storage adapter
+- `types.ts`
+  - Domain types, relation enums, labels, style constants, default analysis settings, `StorageAdapter`.
+- `storage.ts`
+  - Selects local vs Google Drive storage.
+  - Implements local `graph.json` and PDF persistence.
+  - Creates `graph.json.bak` before graph writes.
+- `analyze.ts`
+  - End-to-end PDF upload analysis pipeline.
+- `pdf.ts`
+  - Extracts text from PDF buffers with either local `pdf-parse` or Upstage Document Parse.
+- `llm.ts`
+  - LLM prompts, JSON parsing, retry/fallback behavior.
+  - Supports Upstage Solar Pro 3 and the previous OpenAI-compatible path.
+- `candidates.ts`
+  - Lexical candidate scoring for top-k existing papers.
+- `graph-validation.ts`
+  - Validates and normalizes relation extraction output.
+- `merge.ts`
+  - Incremental graph merge, edge suggestion rules, edge deletion, and paper node deletion.
+- `google-drive/`
+  - Google OAuth, auth storage, Drive client, Drive storage adapter.
 
-Route handlers should call these modules instead of duplicating logic. UI components should depend on types and API responses, not filesystem or Drive internals.
+## Important Invariants
 
-Storage model:
-
-```text
-papers/      original PDFs
-summaries/   canonical per-paper summary JSON files
-cache/       graph.json graph memory and render snapshot
-```
-
-`graph.json` intentionally keeps summary snapshots for fast graph loading and
-candidate selection, but `summaries/{paperId}.summary.json` is the durable
-per-paper record.
+- Do not overwrite user-edited edges.
+- Do not regenerate the whole graph for a new upload.
+- Keep file/storage details behind `StorageAdapter`.
+- Keep React Flow-specific layout data out of `graph.json`.
+- Paper node deletion removes graph nodes, connected edges, related suggestions, and saved node position only.
+- Original PDF files are intentionally preserved when deleting a paper node.

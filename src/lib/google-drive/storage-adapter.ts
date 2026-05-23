@@ -1,20 +1,18 @@
 import { Readable } from "stream";
 import type { drive_v3 } from "googleapis";
-import type { GraphData, PaperSummary, StorageAdapter, StoredFile } from "@/lib/types";
+import type { GraphData, StorageAdapter, StoredFile } from "@/lib/types";
 import {
   CACHE_FOLDER_NAME,
   GRAPH_JSON_FILENAME,
   PAPERS_FOLDER_NAME,
   PROJECTS_FOLDER_NAME,
-  ROOT_FOLDER_NAME,
-  SUMMARIES_FOLDER_NAME
+  ROOT_FOLDER_NAME
 } from "./constants";
 import {
   ensureChildFolder,
   findChildFile,
   getDriveClient,
   readDriveFileAsBuffer,
-  writeJsonFileByName,
   writeGraphJsonFile
 } from "./drive-client";
 import { createGoogleAuthStore, type GoogleAuthStore } from "./auth-store";
@@ -24,7 +22,6 @@ export type GoogleDriveProjectFolders = {
   projectsFolderId: string;
   projectFolderId: string;
   papersFolderId: string;
-  summariesFolderId: string;
   cacheFolderId: string;
 };
 
@@ -99,62 +96,15 @@ export class GoogleDriveStorageAdapter implements StorageAdapter {
     return readDriveFileAsBuffer(drive, fileId);
   }
 
-  async writePaperSummary(projectId: string, summary: PaperSummary): Promise<StoredFile> {
-    const drive = await getDriveClient(this.authStore);
-    const folders = await this.ensureProjectFolders(projectId);
-    const filename = `${summary.paperId}.summary.json`;
-    const fileId = await writeJsonFileByName({
-      drive,
-      parentId: folders.summariesFolderId,
-      filename,
-      value: summary
-    });
-
-    return {
-      id: fileId,
-      driveFileId: fileId,
-      filename,
-      size: Buffer.byteLength(JSON.stringify(summary))
-    };
-  }
-
-  async readPaperSummary(projectId: string, paperId: string): Promise<PaperSummary | null> {
-    const drive = await getDriveClient(this.authStore);
-    const folders = await this.ensureProjectFolders(projectId);
-    const summaryFile = await findChildFile(
-      drive,
-      folders.summariesFolderId,
-      `${paperId}.summary.json`,
-      "application/json"
-    );
-
-    if (!summaryFile?.id) return null;
-
-    const buffer = await readDriveFileAsBuffer(drive, summaryFile.id);
-    return JSON.parse(buffer.toString("utf8")) as PaperSummary;
-  }
-
   async ensureProjectFolders(projectId: string): Promise<GoogleDriveProjectFolders> {
     const drive = await getDriveClient(this.authStore);
     const rootFolderId = await ensureChildFolder(drive, "root", ROOT_FOLDER_NAME);
     const projectsFolderId = await ensureChildFolder(drive, rootFolderId, PROJECTS_FOLDER_NAME);
     const projectFolderId = await ensureChildFolder(drive, projectsFolderId, projectId);
     const papersFolderId = await ensureChildFolder(drive, projectFolderId, PAPERS_FOLDER_NAME);
-    const summariesFolderId = await ensureChildFolder(
-      drive,
-      projectFolderId,
-      SUMMARIES_FOLDER_NAME
-    );
     const cacheFolderId = await ensureChildFolder(drive, projectFolderId, CACHE_FOLDER_NAME);
 
-    return {
-      rootFolderId,
-      projectsFolderId,
-      projectFolderId,
-      papersFolderId,
-      summariesFolderId,
-      cacheFolderId
-    };
+    return { rootFolderId, projectsFolderId, projectFolderId, papersFolderId, cacheFolderId };
   }
 
   async listProjectPdfs(projectId: string): Promise<DrivePdfInfo[]> {

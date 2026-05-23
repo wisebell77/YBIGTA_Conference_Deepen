@@ -8,6 +8,7 @@ export type RelationType =
   | "compares_with"
   | "conceptually_related"
   | "background"
+  | "custom"
   | "unknown";
 
 export type RelationSource =
@@ -21,6 +22,8 @@ export type DirectionMeaning =
   | "citation_direction"
   | "undirected_conceptual_similarity"
   | "unknown";
+
+export type EdgeLineStyle = "solid" | "dashed" | "dotted";
 
 export type EdgeEvidence = {
   paperId: string;
@@ -41,7 +44,6 @@ export type PaperNode = {
   year?: number;
   abstract?: string;
   summary: string;
-  summaryFileId?: string;
   shortSummary: string;
   keywords: string[];
   embeddingText: string;
@@ -96,6 +98,15 @@ export type AnalysisSettings = {
   minConfidenceForSuggestion: number;
 };
 
+export type GraphUiSettings = {
+  edgeColors?: Partial<Record<RelationType, string>>;
+  edgeLineStyles?: Partial<Record<RelationType, EdgeLineStyle>>;
+  nodeShapeMode?: "square" | "circle";
+  showEdgeLabels?: boolean;
+  freeMoveMode?: boolean;
+  nodePositions?: Record<string, { x: number; y: number }>;
+};
+
 export type GraphData = {
   version: string;
   projectId: string;
@@ -104,26 +115,7 @@ export type GraphData = {
   edges: PaperEdge[];
   edgeSuggestions: EdgeSuggestion[];
   analysisSettings: AnalysisSettings;
-};
-
-export type PaperSummary = {
-  schemaVersion: "1.0";
-  paperId: string;
-  projectId: string;
-  title: string;
-  authors: string[];
-  year?: number;
-  abstract?: string;
-  summary: string;
-  shortSummary: string;
-  keywords: string[];
-  embeddingText: string;
-  originalFilename: string;
-  pdfFileId: string;
-  driveFileId?: string;
-  webViewLink?: string;
-  createdAt: string;
-  updatedAt: string;
+  uiSettings?: GraphUiSettings;
 };
 
 export type StoredFile = {
@@ -140,8 +132,6 @@ export interface StorageAdapter {
   writeGraph(projectId: string, graph: GraphData): Promise<void>;
   savePdf(projectId: string, file: Buffer, filename: string): Promise<StoredFile>;
   readPdf(projectId: string, fileId: string): Promise<Buffer>;
-  writePaperSummary?(projectId: string, summary: PaperSummary): Promise<StoredFile>;
-  readPaperSummary?(projectId: string, paperId: string): Promise<PaperSummary | null>;
 }
 
 export const DEFAULT_ANALYSIS_SETTINGS: AnalysisSettings = {
@@ -161,6 +151,7 @@ export const RELATION_LABELS: Record<RelationType, string> = {
   compares_with: "비교",
   conceptually_related: "개념 연결",
   background: "배경 지식",
+  custom: "사용자 정의",
   unknown: "미분류"
 };
 
@@ -177,6 +168,7 @@ export const EDGE_STYLE_MAP: Record<
   compares_with: { stroke: "#666666", strokeWidth: 1.6, strokeDasharray: "4 4" },
   conceptually_related: { stroke: "#999999", strokeWidth: 1.4, strokeDasharray: "none" },
   background: { stroke: "#BBBBBB", strokeWidth: 1.2, strokeDasharray: "3 4" },
+  custom: { stroke: "#111111", strokeWidth: 2.6, strokeDasharray: "8 3" },
   unknown: { stroke: "#CCCCCC", strokeWidth: 1, strokeDasharray: "2 4" }
 };
 
@@ -190,6 +182,14 @@ export function createEmptyGraph(projectId: string): GraphData {
     nodes: [],
     edges: [],
     edgeSuggestions: [],
-    analysisSettings: DEFAULT_ANALYSIS_SETTINGS
+    analysisSettings: DEFAULT_ANALYSIS_SETTINGS,
+    uiSettings: {
+      edgeColors: {},
+      edgeLineStyles: {},
+      nodeShapeMode: "square",
+      showEdgeLabels: true,
+      freeMoveMode: false,
+      nodePositions: {}
+    }
   };
 }

@@ -1,4 +1,4 @@
-import type { EdgeSuggestion, PaperEdge, PaperNode, PaperSummary, StoredFile } from "./types";
+import type { EdgeSuggestion, PaperEdge, PaperNode } from "./types";
 import { extractPaperMetadataAndSummary, extractRelationsWithLLM } from "./llm";
 import { extractTextFromPdf } from "./pdf";
 import { mergeGraph } from "./merge";
@@ -6,22 +6,19 @@ import { readOrCreateGraph, storage } from "./storage";
 import { selectCandidatePapers } from "./candidates";
 
 function createPaperNode(params: {
-  paperId: string;
   metadata: Awaited<ReturnType<typeof extractPaperMetadataAndSummary>>;
   originalFilename: string;
-  storedFile: StoredFile;
-  summaryFile?: StoredFile;
+  storedFile: Awaited<ReturnType<typeof storage.savePdf>>;
 }): PaperNode {
   const timestamp = new Date().toISOString();
   return {
-    id: params.paperId,
+    id: `paper_${crypto.randomUUID()}`,
     type: "paper",
     title: params.metadata.title || params.originalFilename.replace(/\.pdf$/i, ""),
     authors: params.metadata.authors ?? [],
     year: params.metadata.year ?? undefined,
     abstract: params.metadata.abstract || undefined,
     summary: params.metadata.summary || "",
-    summaryFileId: params.summaryFile?.id,
     shortSummary: params.metadata.shortSummary || params.metadata.summary?.slice(0, 160) || "",
     keywords: params.metadata.keywords ?? [],
     embeddingText: params.metadata.embeddingText || params.metadata.summary || params.metadata.title,
@@ -30,36 +27,6 @@ function createPaperNode(params: {
     webViewLink: params.storedFile.webViewLink,
     localFilePath: params.storedFile.localFilePath,
     originalFilename: params.originalFilename,
-    createdAt: timestamp,
-    updatedAt: timestamp
-  };
-}
-
-function createPaperSummary(params: {
-  paperId: string;
-  projectId: string;
-  metadata: Awaited<ReturnType<typeof extractPaperMetadataAndSummary>>;
-  originalFilename: string;
-  storedFile: StoredFile;
-}): PaperSummary {
-  const timestamp = new Date().toISOString();
-  const summary = params.metadata.summary || "";
-  return {
-    schemaVersion: "1.0",
-    paperId: params.paperId,
-    projectId: params.projectId,
-    title: params.metadata.title || params.originalFilename.replace(/\.pdf$/i, ""),
-    authors: params.metadata.authors ?? [],
-    year: params.metadata.year ?? undefined,
-    abstract: params.metadata.abstract || undefined,
-    summary,
-    shortSummary: params.metadata.shortSummary || summary.slice(0, 160) || "",
-    keywords: params.metadata.keywords ?? [],
-    embeddingText: params.metadata.embeddingText || summary || params.metadata.title,
-    originalFilename: params.originalFilename,
-    pdfFileId: params.storedFile.id,
-    driveFileId: params.storedFile.driveFileId,
-    webViewLink: params.storedFile.webViewLink,
     createdAt: timestamp,
     updatedAt: timestamp
   };
@@ -95,34 +62,21 @@ export async function analyzeUploadedPaper(params: {
   pdfBuffer: Buffer;
   originalFilename: string;
 }) {
-  const paperId = `paper_${crypto.randomUUID()}`;
   const storedFile = await storage.savePdf(
     params.projectId,
     params.pdfBuffer,
     params.originalFilename
   );
-  const rawText = await extractTextFromPdf(params.pdfBuffer);
+  const rawText = await extractTextFromPdf(params.pdfBuffer, params.originalFilename);
   const metadata = await extractPaperMetadataAndSummary({
     rawText,
     originalFilename: params.originalFilename,
     storedFile
   });
-  const paperSummary = createPaperSummary({
-    paperId,
-    projectId: params.projectId,
+  const newPaper = createPaperNode({
     metadata,
     originalFilename: params.originalFilename,
     storedFile
-  });
-  const summaryFile = storage.writePaperSummary
-    ? await storage.writePaperSummary(params.projectId, paperSummary)
-    : undefined;
-  const newPaper = createPaperNode({
-    paperId,
-    metadata,
-    originalFilename: params.originalFilename,
-    storedFile,
-    summaryFile
   });
   const graph = await readOrCreateGraph(params.projectId);
   const candidates = selectCandidatePapers({

@@ -8,6 +8,5 @@ export const DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder";
 export const ROOT_FOLDER_NAME = "Deepen";
 export const PROJECTS_FOLDER_NAME = "projects";
 export const PAPERS_FOLDER_NAME = "papers";
-export const SUMMARIES_FOLDER_NAME = "summaries";
 export const CACHE_FOLDER_NAME = "cache";
 export const GRAPH_JSON_FILENAME = "graph.json";

@@ -1,41 +1,141 @@
 # YBIGTA Conference Deepen
 
-PDF 논문을 업로드하면 새 논문을 분석하고, 기존 `graph.json`의 논문 메모리와 비교해 paper node와 paper-to-paper edge를 incremental merge하는 웹 앱입니다.
+Paper Graph Memory is a Next.js app that turns uploaded research PDFs into a persistent paper-to-paper graph.
+
+The important product idea is not a one-off PDF summarizer. It is an incremental graph memory system:
+
+```text
+new PDF
+-> new paper metadata and summary
+-> compare with existing graph memory
+-> select candidate papers
+-> extract relations
+-> merge into graph.json without overwriting user edits
+```
 
 ## Stack
 
 - Next.js App Router
+- React
 - TypeScript
 - Tailwind CSS
 - React Flow
-- `pdf-parse`
+- pdf-parse
+- Upstage Document Parse
+- Upstage Solar Pro 3
+- OpenAI-compatible LLM calls
 - Local JSON/PDF storage
+- Google Drive storage adapter
+- Postgres-backed OAuth token/session storage for deployment
 
-## 실행
+## Quick Start
+
+Install dependencies from the lockfile:
 
 ```bash
-npm install
+npm ci
+```
+
+Use local storage mode while Google Drive is not ready:
+
+```env
+STORAGE_BACKEND=local
+LOCAL_STORAGE_ROOT=./local_data
+```
+
+Seed local demo data from `../data_papers`:
+
+```bash
+npm run seed:local
+```
+
+Run the app:
+
+```bash
 npm run dev
 ```
 
-브라우저에서 `http://localhost:3000`을 엽니다.
-
-## 환경변수
-
-`.env.example`을 참고해 `.env.local`을 만들 수 있습니다.
-
-```bash
-OPENAI_API_KEY=
-LLM_MODEL=gpt-4.1-mini
-MAX_UPLOAD_MB=20
-```
-
-`OPENAI_API_KEY`가 있으면 OpenAI Chat Completions API로 metadata/summary와 relation을 추출합니다. 키가 없으면 로컬 개발 확인용 fallback 분석을 사용하므로 업로드, 저장, graph merge 흐름은 테스트할 수 있습니다.
-
-## 로컬 저장 구조
+Open:
 
 ```text
-data/
+http://localhost:3000
+```
+
+## Environment Files
+
+Use `.env` for the running app.
+
+Use `.env.example` only as the shared template. Do not put real secrets in `.env.example`.
+
+Minimal local development config:
+
+```env
+LLM_PROVIDER=upstage
+UPSTAGE_API_KEY=
+UPSTAGE_BASE_URL=https://api.upstage.ai/v1
+LLM_MODEL=solar-pro3
+PDF_TEXT_PROVIDER=upstage
+PDF_TEXT_FALLBACK_TO_LOCAL=true
+UPSTAGE_DOCUMENT_PARSE_OUTPUT_FORMAT=markdown
+MAX_UPLOAD_MB=20
+STORAGE_BACKEND=local
+LOCAL_STORAGE_ROOT=./local_data
+GOOGLE_AUTH_FILE=./local_data/tokens/google-auth.json
+```
+
+When Google Drive is enabled:
+
+```env
+STORAGE_BACKEND=google_drive
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
+```
+
+For Vercel production, also set:
+
+```env
+DATABASE_URL=postgresql://...
+DATABASE_SSL=true
+GOOGLE_REDIRECT_URI=https://your-domain/api/auth/google/callback
+```
+
+## Scripts
+
+```bash
+npm run dev
+```
+
+Deletes stale `.next` output and starts the Next.js dev server.
+
+```bash
+npm run build
+```
+
+Deletes stale `.next` output and builds production output.
+
+```bash
+npm run typecheck
+```
+
+Generates Next.js route types and runs TypeScript.
+
+```bash
+npm run lint
+```
+
+Runs ESLint.
+
+```bash
+npm run seed:local
+```
+
+Copies PDFs from `../data_papers` into `local_data/projects/demo-project/papers` and creates a demo `graph.json`.
+
+## Local Data Layout
+
+```text
+local_data/
   projects/
     demo-project/
       papers/
@@ -43,44 +143,99 @@ data/
       cache/
         graph.json
         graph.json.bak
+  tokens/
+    google-auth.json
 ```
 
-`data/`는 git에 포함하지 않습니다.
+`local_data/`, `.env`, `.next/`, and `node_modules/` are local-only and should not be committed.
 
-## 주요 API
+## Main API
 
 - `GET /api/projects/:projectId/graph`
 - `POST /api/projects/:projectId/papers/upload`
 - `GET /api/projects/:projectId/papers/:fileId`
+- `DELETE /api/projects/:projectId/papers/:fileId`
+- `POST /api/projects/:projectId/edges`
 - `PATCH /api/projects/:projectId/edges/:edgeId`
+- `DELETE /api/projects/:projectId/edges/:edgeId`
 - `POST /api/projects/:projectId/edge-suggestions/:suggestionId/accept`
 - `POST /api/projects/:projectId/edge-suggestions/:suggestionId/reject`
+- `GET /api/auth/google/start`
+- `GET /api/auth/google/callback`
+- `GET /api/auth/google/status`
+- `POST /api/auth/google/logout`
 
-## 구현 정책
+## Core Rules
 
-- Node는 오직 논문입니다.
-- Edge는 논문 사이 관계입니다.
-- 새 PDF 업로드 시 전체 graph를 재생성하지 않고 새 논문과 후보 논문만 비교합니다.
-- 기존 edge는 보존합니다.
-- `userEdited=true` edge는 LLM 결과로 덮어쓰지 않습니다.
-- 기존 edge와 충돌하는 LLM 판단은 `edgeSuggestions`에만 저장합니다.
-- edge 수정 시 `userEdited=true`, `relationSource=user_edited`로 저장합니다.
-- LLM relation 결과는 새 논문과 후보 논문 사이의 edge만 허용하며, 후보끼리의 edge나 존재하지 않는 node id는 버립니다.
-- `semanticEdgeLimitPerPaper`로 새 논문당 자동 edge 수를 제한합니다.
-- Relation filter는 graph canvas와 paper list에 실제로 적용됩니다.
-- UI는 흑백/무채색 중심으로 구성했습니다.
+- A node is always a paper.
+- An edge is always a paper-to-paper relationship.
+- Semantic relationships are allowed even without direct citation evidence.
+- New uploads must use incremental graph update, not full regeneration.
+- Existing edges are preserved.
+- `userEdited=true` edges must never be overwritten by LLM output.
+- Conflicting LLM output becomes an `edgeSuggestion`.
+- User-created or user-edited edges are permanently saved to `graph.json`.
+- Deleting a paper removes only graph memory for that paper and connected edges; original PDFs are preserved.
+- Duplicate-looking uploads should warn before analysis instead of silently creating another node.
+- UI stays grayscale/monochrome first.
+- React Flow requires source/target handles on custom nodes; removing them can make edges disappear.
+- Edge colors, line styles, node shape, edge label visibility, free-move mode, and node positions are persisted in `graph.json` under `uiSettings`.
+- For dense graphs, the sidebar shows 10 papers first and opens a full paper browser modal for the rest.
 
-## 주요 폴더
+## Project Map
 
 ```text
-src/app/api/                 Route Handlers
-src/components/              React Flow UI
-src/lib/types.ts             GraphData 타입과 relation/style 상수
-src/lib/storage.ts           StorageAdapter, LocalStorageAdapter
-src/lib/pdf.ts               PDF 텍스트 추출
-src/lib/llm.ts               LLM JSON 호출과 fallback
-src/lib/graph-validation.ts  LLM relation 결과 검증/정규화
-src/lib/candidates.ts        후보 논문 lexical scoring
-src/lib/merge.ts             incremental merge, edge/suggestion 처리
-src/lib/analyze.ts           PDF 분석 파이프라인
+src/app/                  Next.js App Router pages and API routes
+src/components/           React Flow workspace and paper node UI
+src/lib/types.ts          GraphData, PaperNode, PaperEdge, constants
+src/lib/storage.ts        StorageAdapter and local storage implementation
+src/lib/google-drive/     Google OAuth and Drive-backed storage adapter
+src/lib/pdf.ts            PDF text extraction
+src/lib/llm.ts            LLM JSON extraction and local fallback behavior
+src/lib/candidates.ts     Candidate paper lexical scoring
+src/lib/graph-validation.ts
+                          Validation and normalization of LLM relation output
+src/lib/merge.ts          Incremental merge rules
+src/lib/analyze.ts        End-to-end upload analysis pipeline
+scripts/seed-local-data.mjs
+                          Local demo graph generator
+scripts/clean-next.mjs    Removes stale .next build output
+docs/                     Handoff and architecture documentation
 ```
+
+## Documentation
+
+Start here:
+
+- [docs/README.md](./docs/README.md)
+- [docs/HANDOFF.md](./docs/HANDOFF.md)
+- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
+- [docs/DATA_MODEL.md](./docs/DATA_MODEL.md)
+- [docs/STORAGE_AND_ENV.md](./docs/STORAGE_AND_ENV.md)
+- [docs/UI_GRAPH.md](./docs/UI_GRAPH.md)
+- [docs/API.md](./docs/API.md)
+
+## Common Problems
+
+### `Cannot find module './611.js'`
+
+This is usually stale `.next` output.
+
+```bash
+npm run clean
+npm run dev
+```
+
+`dev` and `build` already run `clean` first.
+
+### `Cannot find module 'pg'`
+
+Dependencies are out of sync with `package-lock.json`.
+
+```bash
+npm ci
+```
+
+### Edges do not show in React Flow
+
+Check `src/components/PaperNode.tsx`. Custom React Flow nodes need `Handle` components for edge attachment. The current node exposes a target handle on the left and a source handle on the right.

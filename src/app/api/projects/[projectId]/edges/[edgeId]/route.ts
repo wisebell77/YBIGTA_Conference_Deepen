@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { applyEdgeUpdate } from "@/lib/merge";
+import { applyEdgeUpdate, deleteEdge } from "@/lib/merge";
 import { readOrCreateGraph, storage } from "@/lib/storage";
 import { RELATION_LABELS, type RelationType } from "@/lib/types";
 
@@ -30,6 +30,24 @@ export async function PATCH(
     });
     await storage.writeGraph(projectId, result.graph);
     return NextResponse.json({ success: true, edge: result.edge, graph: result.graph });
+  } catch (error) {
+    const message = (error as Error).message;
+    return NextResponse.json(
+      { success: false, error: message },
+      { status: message === "EDGE_NOT_FOUND" ? 404 : 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  _: Request,
+  { params }: { params: Promise<{ projectId: string; edgeId: string }> }
+) {
+  try {
+    const { projectId, edgeId } = await params;
+    const graph = deleteEdge(await readOrCreateGraph(projectId), edgeId);
+    await storage.writeGraph(projectId, graph);
+    return NextResponse.json({ success: true, graph });
   } catch (error) {
     const message = (error as Error).message;
     return NextResponse.json(
