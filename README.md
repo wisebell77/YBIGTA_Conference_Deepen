@@ -154,6 +154,7 @@ local_data/
 - `GET /api/projects/:projectId/graph`
 - `POST /api/projects/:projectId/papers/upload`
 - `POST /api/projects/:projectId/papers/drive-upload-session`
+- `POST /api/projects/:projectId/papers/drive-upload-chunk`
 - `POST /api/projects/:projectId/papers/analyze-drive-file`
 - `GET /api/projects/:projectId/papers/:fileId`
 - `DELETE /api/projects/:projectId/papers/:fileId`

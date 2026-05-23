@@ -110,9 +110,9 @@ Response:
 }
 ```
 
-### Google Drive direct upload
+### Google Drive chunked upload
 
-Production uploads use a two-step Google Drive path when the user is connected:
+Production uploads use a chunked Google Drive path when the user is connected:
 
 ```http
 POST /api/projects/:projectId/papers/drive-upload-session
@@ -129,7 +129,24 @@ Request:
 }
 ```
 
-The response contains a Google Drive resumable `uploadUrl`. The browser sends the PDF directly to that URL, so large PDFs do not pass through the Vercel Function request body.
+The response contains a Google Drive resumable `uploadUrl`. The browser splits the PDF into small chunks and sends each chunk to:
+
+```http
+POST /api/projects/:projectId/papers/drive-upload-chunk
+Content-Type: application/octet-stream
+```
+
+Required headers:
+
+```text
+X-Drive-Upload-Url: Google Drive resumable upload URL
+X-Upload-Start: zero-based byte start
+X-Upload-End: inclusive byte end
+X-Upload-Total: full PDF byte size
+X-Upload-Content-Type: application/pdf
+```
+
+Each request stays below Vercel's Function body limit, and the server forwards the chunk to Google Drive. This avoids browser CORS issues on Drive resumable upload URLs while still supporting PDFs larger than Vercel's single-request upload limit.
 
 After Drive returns the uploaded file id:
 

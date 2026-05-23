@@ -60,6 +60,13 @@ type DriveUploadResult = {
   webViewLink?: string;
 };
 
+type DriveChunkResponse = {
+  success: boolean;
+  done?: boolean;
+  file?: DriveUploadResult;
+  error?: string;
+};
+
 type NodeShapeMode = "square" | "circle";
 
 type PaperEdgeData = {
@@ -73,6 +80,7 @@ type PaperEdgeData = {
 
 const nodeTypes: NodeTypes = { paperNode: PaperNode };
 const edgeTypes: EdgeTypes = { paperEdge: PaperRelationEdge };
+const DRIVE_UPLOAD_CHUNK_SIZE = 3 * 1024 * 1024;
 
 type RelationColorMap = Record<RelationType, string>;
 type RelationLineStyleMap = Record<RelationType, EdgeLineStyle>;
@@ -552,21 +560,7 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
       throw new Error(session.error ?? `DRIVE_UPLOAD_SESSION_FAILED_${sessionResponse.status}`);
     }
 
-    setStatus("Uploading PDF directly to Google Drive");
-    const driveResponse = await fetch(session.uploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": file.type || "application/pdf",
-        "Content-Range": `bytes 0-${file.size - 1}/${file.size}`
-      },
-      body: file
-    });
-    if (!driveResponse.ok) {
-      const body = await driveResponse.text();
-      throw new Error(`DRIVE_UPLOAD_FAILED: ${body.slice(0, 200) || driveResponse.status}`);
-    }
-
-    const driveFile = (await driveResponse.json()) as DriveUploadResult;
+    const driveFile = await uploadFileToDriveInChunks(file, session.uploadUrl);
     if (!driveFile.id) throw new Error("DRIVE_UPLOAD_FILE_ID_MISSING");
 
     setStatus("Analyzing Google Drive PDF");
@@ -579,6 +573,46 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
       }
     );
     await applyUploadResponse(analyzeResponse);
+  };
+
+  const uploadFileToDriveInChunks = async (
+    file: File,
+    uploadUrl: string
+  ): Promise<DriveUploadResult> => {
+    let uploaded = 0;
+
+    while (uploaded < file.size) {
+      const endExclusive = Math.min(uploaded + DRIVE_UPLOAD_CHUNK_SIZE, file.size);
+      const endInclusive = endExclusive - 1;
+      const chunk = file.slice(uploaded, endExclusive);
+
+      setStatus(`Uploading PDF to Google Drive ${Math.round((endExclusive / file.size) * 100)}%`);
+      const response = await fetch(`/api/projects/${projectId}/papers/drive-upload-chunk`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "X-Drive-Upload-Url": uploadUrl,
+          "X-Upload-Start": String(uploaded),
+          "X-Upload-End": String(endInclusive),
+          "X-Upload-Total": String(file.size),
+          "X-Upload-Content-Type": file.type || "application/pdf"
+        },
+        body: chunk
+      });
+      const json = (await response.json()) as DriveChunkResponse;
+
+      if (!response.ok || !json.success) {
+        throw new Error(json.error ?? `DRIVE_CHUNK_UPLOAD_FAILED_${response.status}`);
+      }
+      if (json.done) {
+        if (!json.file) throw new Error("DRIVE_UPLOAD_FILE_METADATA_MISSING");
+        return json.file;
+      }
+
+      uploaded = endExclusive;
+    }
+
+    throw new Error("DRIVE_UPLOAD_INCOMPLETE");
   };
 
   const connectGoogleDrive = () => {

@@ -109,7 +109,7 @@ MAX_UPLOAD_MB=20
 
 The upload route should reject non-PDF uploads and files above this size.
 
-In Google Drive mode, the browser asks the server for a Drive resumable upload URL and then uploads the PDF directly to Google Drive. The server only receives the resulting `driveFileId` for analysis, which avoids Vercel's small serverless request body limit. The analysis route downloads the Drive file as a stream for Upstage Document Parse and falls back to the existing Buffer-based path if stream upload is not accepted.
+In Google Drive mode, the browser asks the server for a Drive resumable upload URL and then sends the PDF to the server in small chunks. Each chunk stays below Vercel's request body limit, and the server forwards the chunk to Google Drive. After Drive returns a `driveFileId`, the analysis route downloads the Drive file as a stream for Upstage Document Parse and falls back to the existing Buffer-based path if stream upload is not accepted.
 
 ## StorageAdapter
 
