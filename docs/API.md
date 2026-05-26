@@ -32,7 +32,7 @@ Used by:
 If Google Drive mode is enabled but the browser has not connected a Drive
 account yet, this route returns an empty graph shape instead of a server error.
 
-### Update graph UI settings
+### Update graph settings
 
 ```http
 PATCH /api/projects/:projectId/graph
@@ -59,6 +59,17 @@ Body:
     "nodePositions": {
       "paper_001": { "x": 120, "y": 240 }
     }
+  },
+  "analysisSettings": {
+    "candidateLimitPerNewPaper": 8,
+    "candidateTitleWeight": 2,
+    "candidateKeywordWeight": 3,
+    "candidateSummaryWeight": 1,
+    "candidateMinScore": 0.05,
+    "includeZeroScoreCandidates": true,
+    "minConfidenceForAutoEdge": 0.72,
+    "minConfidenceForSuggestion": 0.45,
+    "customEdgePrompt": ""
   }
 }
 ```
@@ -68,8 +79,13 @@ Behavior:
 - validates relation color values as hex colors
 - validates edge line styles as `solid`, `dashed`, or `dotted`
 - validates node shape, booleans, and finite node coordinates
+- validates analysis weights, thresholds, candidate limits, and prompt text
 - stores UI settings in `graph.json`
+- stores edge generation settings in `graph.json`
 - returns the updated graph
+
+Analysis settings are read only when a new paper is analyzed. Updating them does
+not retroactively rewrite existing nodes, edges, or suggestions.
 
 ## Papers
 

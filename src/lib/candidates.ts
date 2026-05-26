@@ -1,4 +1,4 @@
-import type { PaperEdge, PaperNode } from "./types";
+import type { AnalysisSettings, PaperEdge, PaperNode } from "./types";
 
 const STOPWORDS = new Set([
   "the",
@@ -17,17 +17,24 @@ const STOPWORDS = new Set([
   "through",
   "based",
   "analysis",
-  "research"
+  "research",
+  "논문",
+  "연구",
+  "분석",
+  "방법",
+  "결과"
 ]);
 
 function tokenize(value: string): Set<string> {
+  const tokens = value
+    .toLowerCase()
+    .normalize("NFKC")
+    .match(/[\p{L}\p{N}][\p{L}\p{N}-]*/gu);
+
   return new Set(
-    value
-      .toLowerCase()
-      .replace(/[^a-z0-9가-힣\s-]/g, " ")
-      .split(/\s+/)
+    (tokens ?? [])
       .map((token) => token.trim())
-      .filter((token) => token.length > 2 && !STOPWORDS.has(token))
+      .filter((token) => token.length > 1 && !STOPWORDS.has(token))
   );
 }
 
@@ -47,25 +54,47 @@ function arrayOverlap(a: string[], b: string[]): number {
   return intersection / Math.max(left.size, right.size);
 }
 
-export function scoreCandidate(newPaper: PaperNode, oldPaper: PaperNode): number {
+export function scoreCandidate(
+  newPaper: PaperNode,
+  oldPaper: PaperNode,
+  settings: Pick<
+    AnalysisSettings,
+    "candidateTitleWeight" | "candidateKeywordWeight" | "candidateSummaryWeight"
+  >
+): number {
   const titleScore = keywordOverlap(newPaper.title, oldPaper.title);
   const keywordScore = arrayOverlap(newPaper.keywords, oldPaper.keywords);
   const summaryScore = keywordOverlap(newPaper.summary, oldPaper.summary);
-  return 0.2 * titleScore + 0.5 * keywordScore + 0.3 * summaryScore;
+  const totalWeight =
+    settings.candidateTitleWeight +
+    settings.candidateKeywordWeight +
+    settings.candidateSummaryWeight;
+  if (totalWeight <= 0) return 0;
+  return (
+    (settings.candidateTitleWeight * titleScore +
+      settings.candidateKeywordWeight * keywordScore +
+      settings.candidateSummaryWeight * summaryScore) /
+    totalWeight
+  );
 }
 
 export function selectCandidatePapers(params: {
   newPaper: PaperNode;
   existingNodes: PaperNode[];
   existingEdges: PaperEdge[];
-  limit: number;
+  settings: AnalysisSettings;
 }): PaperNode[] {
-  const { newPaper, existingNodes, limit } = params;
+  const { newPaper, existingNodes, settings } = params;
   return existingNodes
     .filter((paper) => paper.id !== newPaper.id)
-    .map((paper) => ({ paper, score: scoreCandidate(newPaper, paper) }))
-    .filter(({ score }) => score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
+    .map((paper) => ({ paper, score: scoreCandidate(newPaper, paper, settings) }))
+    .filter(
+      ({ score }) => settings.includeZeroScoreCandidates || score >= settings.candidateMinScore
+    )
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return Date.parse(b.paper.updatedAt) - Date.parse(a.paper.updatedAt);
+    })
+    .slice(0, settings.candidateLimitPerNewPaper)
     .map(({ paper }) => paper);
 }

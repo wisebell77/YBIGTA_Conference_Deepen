@@ -16,6 +16,23 @@ This folder is the handoff packet for collaborators. It explains what has been b
    - React Flow implementation, node/edge rendering, filters, editing, and current UX details.
 6. [API.md](./API.md)
    - Route handlers, request/response contracts, and persistence behavior.
+7. [../src/lib/EDGE_GENERATION.md](../src/lib/EDGE_GENERATION.md)
+   - Candidate scoring, LLM edge policy, validation, merge rules, and configurable settings.
+
+## Module-Level Notes
+
+- [../src/app/README.md](../src/app/README.md)
+  - App Router entry points and client/server boundaries.
+- [../src/app/api/README.md](../src/app/api/README.md)
+  - API route groups and handler rules.
+- [../src/components/README.md](../src/components/README.md)
+  - React Flow workspace, modals, visual controls, and deletion UX.
+- [../src/lib/README.md](../src/lib/README.md)
+  - Domain modules, storage boundary, analysis pipeline, and invariants.
+- [../src/lib/google-drive/README.md](../src/lib/google-drive/README.md)
+  - OAuth, Drive storage, and Drive adapter responsibilities.
+- [../scripts/README.md](../scripts/README.md)
+  - Local maintenance and demo seeding scripts.
 
 ## Non-Negotiable Rules
 
@@ -28,5 +45,7 @@ This folder is the handoff packet for collaborators. It explains what has been b
 - Local mode uses `local_data/` as the Drive replacement.
 - React Flow custom nodes must keep their handles or edges can disappear.
 - Deleting a paper node must not delete the original PDF file.
-- Production uses Upstage Document Parse and Solar Pro 3 by default.
+- Production can use Gemini or Upstage for LLM analysis, depending on `LLM_PROVIDER`.
+- Upstage Document Parse remains the recommended parser for OCR/layout-heavy PDFs.
 - Vercel deployments must use Postgres-backed OAuth token/session storage.
+- Edge generation settings are project settings and apply only to future uploads.

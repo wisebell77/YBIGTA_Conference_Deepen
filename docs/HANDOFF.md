@@ -38,7 +38,10 @@ Implemented features:
 - Edge suggestion accept/reject endpoints
 - Local seed data generation from `../data_papers`
 - Upstage Document Parse PDF text extraction
+- Gemini metadata/summary/relation extraction through Google AI Studio's OpenAI-compatible API
 - Upstage Solar Pro 3 metadata/summary/relation extraction
+- Project-level edge generation settings persisted in `graph.json`
+- Korean help modal opened from the bottom-right `도움말` button
 
 ## First Setup On Another PC
 
@@ -91,6 +94,21 @@ Use Google Drive mode only when OAuth and Drive access are ready:
 STORAGE_BACKEND=google_drive
 DATABASE_URL=...
 DATABASE_SSL=true
+```
+
+LLM provider is selected independently:
+
+```env
+LLM_PROVIDER=gemini
+LLM_PROVIDER=upstage
+LLM_PROVIDER=openai
+```
+
+PDF extraction is also selected independently:
+
+```env
+PDF_TEXT_PROVIDER=local
+PDF_TEXT_PROVIDER=upstage
 ```
 
 ## Local Demo Data
@@ -183,4 +201,6 @@ Look for:
 - Keep local data and real secrets out of git.
 - Keep original PDFs when deleting graph paper nodes unless product requirements change.
 - Store graph UI preferences in `GraphData.uiSettings`, not in component-only state.
+- Store edge generation policy in `GraphData.analysisSettings`.
+- Treat `analysisSettings` changes as future-upload policy only.
 - Use the dense graph controls before changing the domain data model: hide edge labels, tune line styles, move nodes, or reset positions.

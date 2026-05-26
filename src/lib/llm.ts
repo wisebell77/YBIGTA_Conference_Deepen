@@ -41,7 +41,7 @@ function extractJson<T>(text: string): T {
   }
 }
 
-type LlmProvider = "openai" | "upstage";
+type LlmProvider = "openai" | "upstage" | "gemini";
 
 type LlmConfig = {
   provider: LlmProvider;
@@ -71,6 +71,19 @@ function llmConfig(): LlmConfig {
       model: process.env.LLM_MODEL || "solar-pro3",
       chatCompletionsUrl: chatCompletionsUrl(
         process.env.UPSTAGE_BASE_URL ?? "https://api.upstage.ai/v1"
+      )
+    };
+  }
+
+  if (provider === "gemini") {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("LLM_API_KEY_MISSING");
+    return {
+      provider: "gemini",
+      apiKey,
+      model: process.env.LLM_MODEL || "gemini-2.5-flash",
+      chatCompletionsUrl: chatCompletionsUrl(
+        process.env.GEMINI_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta/openai"
       )
     };
   }
@@ -252,6 +265,7 @@ export async function extractRelationsWithLLM(params: {
   candidates: PaperNode[];
   existingEdges: PaperEdge[];
   edgeLimit: number;
+  customEdgePrompt?: string;
 }): Promise<RelationExtractionResult> {
   if (params.candidates.length === 0) return { edges: [], suggestions: [] };
 
@@ -288,11 +302,34 @@ Important rules:
 
 Output language:
 - label and descriptions should be Korean.
-- relationType must remain English enum.`;
+- relationType must remain English enum.
+
+Required JSON schema:
+{
+  "edges": [
+    {
+      "source": "paper id",
+      "target": "paper id",
+      "directed": boolean,
+      "directionMeaning": "knowledge_flow" | "citation_direction" | "undirected_conceptual_similarity" | "unknown",
+      "relationType": "extends" | "prerequisite" | "supports" | "contradicts" | "applies" | "uses_method" | "compares_with" | "conceptually_related" | "background" | "unknown",
+      "label": "Korean label",
+      "shortDescription": "Korean one sentence",
+      "longDescription": "Korean explanation based on both paper summaries",
+      "relationSource": "semantic_inference" | "citation_based",
+      "confidence": number,
+      "evidence": [{ "paperId": "paper id", "type": "abstract_similarity" | "method_similarity" | "keyword_overlap" | "llm_reasoning", "text": "short evidence" }]
+    }
+  ],
+  "edgeSuggestions": []
+}`;
+  const finalPrompt = params.customEdgePrompt?.trim()
+    ? `${prompt}\n\nProject-specific edge policy:\n${params.customEdgePrompt.trim()}`
+    : prompt;
 
   try {
     const result = await callJsonLLM<{ edges: RawRelationEdge[]; edgeSuggestions: RawSuggestion[] }>(
-      prompt,
+      finalPrompt,
       {
         newPaper: params.newPaper,
         candidatePapers: params.candidates.map((paper) => ({

@@ -41,7 +41,7 @@ Pipeline:
 2. Extract raw text from PDF with the configured parser.
 3. Extract paper metadata and summary with the configured LLM provider.
 4. Read or create graph.
-5. Select candidate papers from existing graph nodes.
+5. Select candidate papers from existing graph nodes using project `analysisSettings`.
 6. Ask LLM for relations between new paper and candidates.
 7. Hydrate relation output into PaperEdge and EdgeSuggestion records.
 8. Merge into graph without overwriting existing graph data.
@@ -97,21 +97,26 @@ Calls the LLM for:
 - paper metadata and summary
 - paper-to-paper relation extraction
 
+`LLM_PROVIDER=gemini` uses Google AI Studio through Gemini's OpenAI-compatible API.
 `LLM_PROVIDER=upstage` uses Solar through Upstage's OpenAI-compatible Chat API.
-`LLM_PROVIDER=openai` keeps the previous OpenAI path for comparison. The module
+`LLM_PROVIDER=openai` keeps an OpenAI-compatible path for comparison. The module
 also contains fallback behavior for local development when no provider key is present.
+
+Project-specific edge policy from `analysisSettings.customEdgePrompt` is appended
+to the base relation extraction prompt.
 
 ### `src/lib/candidates.ts`
 
 Selects top-k existing papers to compare with the new paper.
 
-Current MVP scoring uses lexical overlap between:
+Current MVP scoring uses weighted lexical overlap between:
 
 - title
 - keywords
 - summary
 
-This module is the right place to add embeddings later.
+Weights, minimum score, zero-score fallback, and candidate count are controlled by
+`AnalysisSettings`. This module is the right place to add embeddings later.
 
 ### `src/lib/graph-validation.ts`
 
@@ -155,6 +160,8 @@ Responsibilities:
 - accept/reject suggestions
 - resize side panels
 - toggle node shape mode
+- edit edge generation settings
+- open the Korean help modal
 - log out of the local Google Drive session
 
 ### `src/components/PaperNode.tsx`
@@ -182,4 +189,5 @@ Any future storage provider should implement this interface.
 
 The UI consumes `GraphData` and converts it to React Flow nodes and edges in `GraphWorkspace.tsx`.
 
-Do not store React Flow-specific data in `graph.json`. `graph.json` should remain a domain data file.
+Do not store raw React Flow node/edge objects in `graph.json`. Persist only stable
+domain data plus small project settings such as `uiSettings.nodePositions`.

@@ -2,56 +2,33 @@
 
 Paper Graph Memory is a Next.js app that turns uploaded research PDFs into a persistent paper-to-paper graph.
 
-The important product idea is not a one-off PDF summarizer. It is an incremental graph memory system:
+The core product is an incremental graph memory system:
 
 ```text
 new PDF
--> new paper metadata and summary
+-> extract paper text
+-> create paper metadata and summary
 -> compare with existing graph memory
 -> select candidate papers
--> extract relations
+-> extract paper-to-paper relations
 -> merge into graph.json without overwriting user edits
 ```
 
 ## Stack
 
-- Next.js App Router
-- React
-- TypeScript
-- Tailwind CSS
-- React Flow
-- pdf-parse
-- Upstage Document Parse
-- Upstage Solar Pro 3
-- OpenAI-compatible LLM calls
-- Local JSON/PDF storage
-- Google Drive storage adapter
-- Postgres-backed OAuth token/session storage for deployment
+- Next.js App Router, React, TypeScript, Tailwind CSS
+- React Flow for graph rendering
+- `pdf-parse` local PDF extraction
+- Upstage Document Parse for OCR/layout-heavy PDF extraction
+- Gemini, Upstage Solar, or OpenAI-compatible chat models for LLM analysis
+- Local JSON/PDF storage or Google Drive storage
+- Optional Postgres-backed OAuth token/session storage for shared deployments
 
 ## Quick Start
 
-Install dependencies from the lockfile:
-
 ```bash
 npm ci
-```
-
-Use local storage mode while Google Drive is not ready:
-
-```env
-STORAGE_BACKEND=local
-LOCAL_STORAGE_ROOT=./local_data
-```
-
-Seed local demo data from `../data_papers`:
-
-```bash
 npm run seed:local
-```
-
-Run the app:
-
-```bash
 npm run dev
 ```
 
@@ -61,29 +38,54 @@ Open:
 http://localhost:3000
 ```
 
-## Environment Files
+Use `.env` for local secrets and `.env.example` as the public template. Never commit real API keys.
 
-Use `.env` for the running app.
+## Provider Modes
 
-Use `.env.example` only as the shared template. Do not put real secrets in `.env.example`.
+Gemini mode:
 
-Minimal local development config:
+```env
+LLM_PROVIDER=gemini
+LLM_MODEL=gemini-2.5-flash
+GEMINI_API_KEY=...
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+```
+
+Upstage mode:
 
 ```env
 LLM_PROVIDER=upstage
-UPSTAGE_API_KEY=
-UPSTAGE_BASE_URL=https://api.upstage.ai/v1
 LLM_MODEL=solar-pro3
-PDF_TEXT_PROVIDER=upstage
-PDF_TEXT_FALLBACK_TO_LOCAL=true
-UPSTAGE_DOCUMENT_PARSE_OUTPUT_FORMAT=markdown
-MAX_UPLOAD_MB=20
-STORAGE_BACKEND=local
-LOCAL_STORAGE_ROOT=./local_data
-GOOGLE_AUTH_FILE=./local_data/tokens/google-auth.json
+UPSTAGE_API_KEY=...
+UPSTAGE_BASE_URL=https://api.upstage.ai/v1
 ```
 
-When Google Drive is enabled:
+OpenAI-compatible comparison mode:
+
+```env
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4.1-mini
+OPENAI_API_KEY=...
+OPENAI_BASE_URL=https://api.openai.com/v1
+```
+
+PDF extraction can be selected independently:
+
+```env
+PDF_TEXT_PROVIDER=local
+PDF_TEXT_PROVIDER=upstage
+```
+
+## Storage Modes
+
+Local mode:
+
+```env
+STORAGE_BACKEND=local
+LOCAL_STORAGE_ROOT=./local_data
+```
+
+Google Drive mode:
 
 ```env
 STORAGE_BACKEND=google_drive
@@ -92,13 +94,7 @@ GOOGLE_CLIENT_SECRET=...
 GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
 ```
 
-For Vercel production, also set:
-
-```env
-DATABASE_URL=postgresql://...
-DATABASE_SSL=true
-GOOGLE_REDIRECT_URI=https://your-domain/api/auth/google/callback
-```
+Project data is persisted in `graph.json`. That file stores paper nodes, paper edges, suggestions, UI preferences, and edge generation settings.
 
 ## Scripts
 
@@ -130,81 +126,51 @@ Runs ESLint.
 npm run seed:local
 ```
 
-Copies PDFs from `../data_papers` into `local_data/projects/demo-project/papers` and creates a demo `graph.json`.
-
-## Local Data Layout
-
-```text
-local_data/
-  projects/
-    demo-project/
-      papers/
-        file_*.pdf
-      cache/
-        graph.json
-        graph.json.bak
-  tokens/
-    google-auth.json
-```
-
-`local_data/`, `.env`, `.next/`, and `node_modules/` are local-only and should not be committed.
-
-## Main API
-
-- `GET /api/projects/:projectId/graph`
-- `POST /api/projects/:projectId/papers/upload`
-- `POST /api/projects/:projectId/papers/drive-upload-session`
-- `POST /api/projects/:projectId/papers/drive-upload-chunk`
-- `POST /api/projects/:projectId/papers/analyze-drive-file`
-- `GET /api/projects/:projectId/papers/:fileId`
-- `DELETE /api/projects/:projectId/papers/:fileId`
-- `POST /api/projects/:projectId/edges`
-- `PATCH /api/projects/:projectId/edges/:edgeId`
-- `DELETE /api/projects/:projectId/edges/:edgeId`
-- `POST /api/projects/:projectId/edge-suggestions/:suggestionId/accept`
-- `POST /api/projects/:projectId/edge-suggestions/:suggestionId/reject`
-- `GET /api/auth/google/start`
-- `GET /api/auth/google/callback`
-- `GET /api/auth/google/status`
-- `POST /api/auth/google/logout`
+Copies demo PDFs from `../data_papers` into `local_data/projects/demo-project/papers` and creates a demo `graph.json`.
 
 ## Core Rules
 
 - A node is always a paper.
 - An edge is always a paper-to-paper relationship.
-- Semantic relationships are allowed even without direct citation evidence.
-- New uploads must use incremental graph update, not full regeneration.
+- New uploads use incremental graph updates, not full graph regeneration.
 - Existing edges are preserved.
-- `userEdited=true` edges must never be overwritten by LLM output.
+- `userEdited=true` edges are never overwritten by LLM output.
 - Conflicting LLM output becomes an `edgeSuggestion`.
-- User-created or user-edited edges are permanently saved to `graph.json`.
+- User-created and user-edited edges are permanently saved to `graph.json`.
 - Deleting a paper removes only graph memory for that paper and connected edges; original PDFs are preserved.
-- Duplicate-looking uploads should warn before analysis instead of silently creating another node.
-- UI stays grayscale/monochrome first.
-- React Flow requires source/target handles on custom nodes; removing them can make edges disappear.
-- Edge colors, line styles, node shape, edge label visibility, free-move mode, and node positions are persisted in `graph.json` under `uiSettings`.
-- For dense graphs, the sidebar shows 10 papers first and opens a full paper browser modal for the rest.
+- Duplicate-looking uploads warn before analysis instead of silently creating another node.
+- React Flow custom nodes must keep source/target handles or edges can disappear.
+- UI preferences and edge generation settings are persisted in `graph.json`.
+- Edge generation settings apply only to future uploads.
 
 ## Project Map
 
 ```text
-src/app/                  Next.js App Router pages and API routes
+src/app/                  Next.js app entry and route handlers
+src/app/api/              API routes for graph, papers, edges, OAuth
 src/components/           React Flow workspace and paper node UI
-src/lib/types.ts          GraphData, PaperNode, PaperEdge, constants
-src/lib/storage.ts        StorageAdapter and local storage implementation
+src/lib/types.ts          GraphData, PaperNode, PaperEdge, settings, constants
+src/lib/storage.ts        StorageAdapter selection and local storage
 src/lib/google-drive/     Google OAuth and Drive-backed storage adapter
 src/lib/pdf.ts            PDF text extraction
-src/lib/llm.ts            LLM JSON extraction and local fallback behavior
+src/lib/llm.ts            Provider calls, prompts, JSON parsing, fallback behavior
 src/lib/candidates.ts     Candidate paper lexical scoring
 src/lib/graph-validation.ts
                           Validation and normalization of LLM relation output
 src/lib/merge.ts          Incremental merge rules
 src/lib/analyze.ts        End-to-end upload analysis pipeline
-scripts/seed-local-data.mjs
-                          Local demo graph generator
-scripts/clean-next.mjs    Removes stale .next build output
+scripts/                  Local maintenance and demo seeding scripts
 docs/                     Handoff and architecture documentation
 ```
+
+## Module READMEs
+
+- [src/app/README.md](./src/app/README.md)
+- [src/app/api/README.md](./src/app/api/README.md)
+- [src/components/README.md](./src/components/README.md)
+- [src/lib/README.md](./src/lib/README.md)
+- [src/lib/google-drive/README.md](./src/lib/google-drive/README.md)
+- [scripts/README.md](./scripts/README.md)
 
 ## Documentation
 
@@ -217,6 +183,7 @@ Start here:
 - [docs/STORAGE_AND_ENV.md](./docs/STORAGE_AND_ENV.md)
 - [docs/UI_GRAPH.md](./docs/UI_GRAPH.md)
 - [docs/API.md](./docs/API.md)
+- [src/lib/EDGE_GENERATION.md](./src/lib/EDGE_GENERATION.md)
 
 ## Common Problems
 
@@ -241,4 +208,4 @@ npm ci
 
 ### Edges do not show in React Flow
 
-Check `src/components/PaperNode.tsx`. Custom React Flow nodes need `Handle` components for edge attachment. The current node exposes a target handle on the left and a source handle on the right.
+Check [src/components/PaperNode.tsx](./src/components/PaperNode.tsx). Custom React Flow nodes need `Handle` components for edge attachment.

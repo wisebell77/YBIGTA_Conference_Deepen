@@ -96,6 +96,12 @@ export type AnalysisSettings = {
   candidateLimitPerNewPaper: number;
   minConfidenceForAutoEdge: number;
   minConfidenceForSuggestion: number;
+  candidateTitleWeight: number;
+  candidateKeywordWeight: number;
+  candidateSummaryWeight: number;
+  candidateMinScore: number;
+  includeZeroScoreCandidates: boolean;
+  customEdgePrompt: string;
 };
 
 export type GraphUiSettings = {
@@ -138,7 +144,13 @@ export const DEFAULT_ANALYSIS_SETTINGS: AnalysisSettings = {
   semanticEdgeLimitPerPaper: 5,
   candidateLimitPerNewPaper: 8,
   minConfidenceForAutoEdge: 0.68,
-  minConfidenceForSuggestion: 0.45
+  minConfidenceForSuggestion: 0.45,
+  candidateTitleWeight: 0.2,
+  candidateKeywordWeight: 0.5,
+  candidateSummaryWeight: 0.3,
+  candidateMinScore: 0,
+  includeZeroScoreCandidates: true,
+  customEdgePrompt: ""
 };
 
 export const RELATION_LABELS: Record<RelationType, string> = {

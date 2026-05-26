@@ -134,8 +134,14 @@ Suggestions are used when LLM output should not directly overwrite existing grap
 type AnalysisSettings = {
   semanticEdgeLimitPerPaper: number;
   candidateLimitPerNewPaper: number;
+  candidateTitleWeight: number;
+  candidateKeywordWeight: number;
+  candidateSummaryWeight: number;
+  candidateMinScore: number;
+  includeZeroScoreCandidates: boolean;
   minConfidenceForAutoEdge: number;
   minConfidenceForSuggestion: number;
+  customEdgePrompt: string;
 };
 ```
 
@@ -145,10 +151,19 @@ Defaults:
 {
   semanticEdgeLimitPerPaper: 5,
   candidateLimitPerNewPaper: 8,
-  minConfidenceForAutoEdge: 0.68,
-  minConfidenceForSuggestion: 0.45
+  candidateTitleWeight: 2,
+  candidateKeywordWeight: 3,
+  candidateSummaryWeight: 1,
+  candidateMinScore: 0.05,
+  includeZeroScoreCandidates: true,
+  minConfidenceForAutoEdge: 0.72,
+  minConfidenceForSuggestion: 0.45,
+  customEdgePrompt: ""
 }
 ```
+
+These settings are project policy for future uploads. Updating them should not
+rewrite existing nodes, edges, or suggestions.
 
 ## GraphUiSettings
 
