@@ -1,0 +1,12 @@
+export const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+export const OPENID_SCOPE = "openid";
+export const EMAIL_SCOPE = "email";
+export const PROFILE_SCOPE = "profile";
+export const OAUTH_SCOPES = [DRIVE_FILE_SCOPE, OPENID_SCOPE, EMAIL_SCOPE, PROFILE_SCOPE];
+export const SESSION_COOKIE_NAME = "deepen_session";
+export const DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder";
+export const ROOT_FOLDER_NAME = "Deepen";
+export const PROJECTS_FOLDER_NAME = "projects";
+export const PAPERS_FOLDER_NAME = "papers";
+export const CACHE_FOLDER_NAME = "cache";
+export const GRAPH_JSON_FILENAME = "graph.json";

@@ -1,0 +1,12 @@
+.next
+node_modules
+data
+local_data
+.env
+.env*.local
+next-env.d.ts
+tsconfig.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.claude
