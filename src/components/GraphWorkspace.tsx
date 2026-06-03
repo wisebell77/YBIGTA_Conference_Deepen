@@ -8,11 +8,13 @@ import ReactFlow, {
   Controls,
   EdgeLabelRenderer,
   MiniMap,
+  applyNodeChanges,
   type Connection,
   type Edge,
   type EdgeProps,
   type EdgeTypes,
   type Node,
+  type NodeChange,
   type NodeTypes
 } from "reactflow";
 import PaperNode from "./PaperNode";
@@ -558,6 +560,10 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
     setFlowNodes(computedNodes);
   }, [computedNodes]);
 
+  const onNodesChange = useCallback((changes: NodeChange[]) => {
+    setFlowNodes((current) => applyNodeChanges(changes, current));
+  }, []);
+
   const filteredPapers = useMemo(() => {
     if (!graph) return [];
     const value = query.trim().toLowerCase();
@@ -1029,15 +1035,6 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
     void saveUiSettings({ freeMoveMode: enabled });
   };
 
-  const updateFlowNodePosition = useCallback(
-    (nodeId: string, position: { x: number; y: number }) => {
-      setFlowNodes((current) =>
-        current.map((node) => (node.id === nodeId ? { ...node, position } : node))
-      );
-    },
-    []
-  );
-
   const saveNodePosition = async (nodeId: string, position: { x: number; y: number }) => {
     const nextPositions = {
       ...(graph?.uiSettings?.nodePositions ?? {}),
@@ -1054,7 +1051,28 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
           }
         : current
     );
-    await saveUiSettings({ nodePositions: nextPositions });
+
+    const currentSettings = graph?.uiSettings ?? {};
+    const nextSettings: GraphUiSettings = {
+      ...currentSettings,
+      edgeColors: relationColors,
+      edgeLineStyles: relationLineStyles,
+      nodeShapeMode: shapeMode,
+      showEdgeLabels,
+      freeMoveMode,
+      nodePositions: nextPositions
+    };
+    try {
+      const response = await fetch(`/api/projects/${projectId}/graph`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uiSettings: nextSettings })
+      });
+      const json = (await response.json()) as { success: boolean; error?: string };
+      if (!json.success) setStatus(json.error ?? "NODE_POSITION_SAVE_FAILED");
+    } catch (error) {
+      setStatus((error as Error).message);
+    }
   };
 
   const resetNodePositions = () => {
@@ -1377,8 +1395,9 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
             edges={visibleEdges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
-            fitView
+            defaultViewport={{ x: 40, y: 40, zoom: 0.85 }}
             defaultEdgeOptions={{ type: "paperEdge" }}
+            onNodesChange={onNodesChange}
             onNodeClick={(_, node) =>
               setSelected({ kind: "paper", paper: node.data.paper as PaperNodeType })
             }
@@ -1392,11 +1411,7 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
             connectionLineStyle={{ stroke: "#111827", strokeWidth: 2 }}
             connectionMode={ConnectionMode.Loose}
             nodesDraggable={freeMoveMode}
-            onNodeDrag={(_, node) => updateFlowNodePosition(node.id, node.position)}
-            onNodeDragStop={(_, node) => {
-              updateFlowNodePosition(node.id, node.position);
-              void saveNodePosition(node.id, node.position);
-            }}
+            onNodeDragStop={(_, node) => void saveNodePosition(node.id, node.position)}
           >
             <Background color="#d4d4d4" gap={18} />
             <Controls showInteractive={false} />
