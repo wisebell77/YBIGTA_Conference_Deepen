@@ -457,6 +457,8 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
   const [showHelp, setShowHelp] = useState(false);
   const [showEdgeLabels, setShowEdgeLabels] = useState(true);
   const [freeMoveMode, setFreeMoveMode] = useState(false);
+  const [flowNodes, setFlowNodes] = useState<Node[]>([]);
+  const [isRefreshingEdges, setIsRefreshingEdges] = useState(false);
   const [analysisForm, setAnalysisForm] = useState<AnalysisSettingsForm>(
     analysisSettingsForm(DEFAULT_ANALYSIS_SETTINGS)
   );
@@ -547,10 +549,14 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
     return ids;
   }, [graph, activeRelations, visibleEdges]);
 
-  const nodes = useMemo(
+  const computedNodes = useMemo(
     () => (graph ? toReactFlowNodes(graph, visibleNodeIds, shapeMode) : []),
     [graph, visibleNodeIds, shapeMode]
   );
+
+  useEffect(() => {
+    setFlowNodes(computedNodes);
+  }, [computedNodes]);
 
   const filteredPapers = useMemo(() => {
     if (!graph) return [];
@@ -914,7 +920,9 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
     setStatus("Settings saved to graph.json");
   };
 
-  const saveAnalysisSettings = async () => {
+  const saveAnalysisSettings = async (
+    options: { closeModal?: boolean; quiet?: boolean } = {}
+  ): Promise<GraphData | null> => {
     const response = await fetch(`/api/projects/${projectId}/graph`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -923,12 +931,61 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
     const json = (await response.json()) as { success: boolean; graph?: GraphData; error?: string };
     if (!json.success || !json.graph) {
       setStatus(json.error ?? "ANALYSIS_SETTINGS_SAVE_FAILED");
-      return;
+      return null;
     }
     setGraph(json.graph);
     setAnalysisForm(analysisSettingsForm(json.graph.analysisSettings));
-    setShowAnalysisSettings(false);
-    setStatus("Edge generation settings saved for future uploads");
+    if (options.closeModal ?? true) setShowAnalysisSettings(false);
+    if (!options.quiet) setStatus("Edge generation settings saved for future uploads");
+    return json.graph;
+  };
+
+  const refreshGeneratedEdges = async () => {
+    if (!graph || graph.nodes.length < 2) {
+      setStatus("At least two papers are required to refresh generated edges");
+      return;
+    }
+    const confirmed = window.confirm(
+      "Refresh existing generated edges with the current settings?\n\nThis will call the configured LLM for the papers in this graph. User-created and user-edited edges will be preserved."
+    );
+    if (!confirmed) return;
+
+    setIsRefreshingEdges(true);
+    try {
+      const savedGraph = await saveAnalysisSettings({ closeModal: false, quiet: true });
+      if (!savedGraph) return;
+
+      setStatus("Refreshing generated edges with current settings");
+      const response = await fetch(`/api/projects/${projectId}/edges/refresh`, {
+        method: "POST"
+      });
+      const json = (await response.json()) as {
+        success: boolean;
+        graph?: GraphData;
+        stats?: {
+          preservedUserEdges: number;
+          removedGeneratedEdges: number;
+          generatedEdges: number;
+          pendingSuggestions: number;
+        };
+        error?: string;
+      };
+      if (!json.success || !json.graph) {
+        setStatus(json.error ?? "EDGE_REFRESH_FAILED");
+        return;
+      }
+
+      setGraph(json.graph);
+      setAnalysisForm(analysisSettingsForm(json.graph.analysisSettings));
+      setShowAnalysisSettings(false);
+      setStatus(
+        `Refreshed generated edges: ${json.stats?.generatedEdges ?? json.graph.edges.length} edges, ${json.stats?.pendingSuggestions ?? 0} suggestions`
+      );
+    } catch (error) {
+      setStatus((error as Error).message);
+    } finally {
+      setIsRefreshingEdges(false);
+    }
   };
 
   const resetAnalysisSettings = () => {
@@ -971,6 +1028,15 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
     setFreeMoveMode(enabled);
     void saveUiSettings({ freeMoveMode: enabled });
   };
+
+  const updateFlowNodePosition = useCallback(
+    (nodeId: string, position: { x: number; y: number }) => {
+      setFlowNodes((current) =>
+        current.map((node) => (node.id === nodeId ? { ...node, position } : node))
+      );
+    },
+    []
+  );
 
   const saveNodePosition = async (nodeId: string, position: { x: number; y: number }) => {
     const nextPositions = {
@@ -1307,7 +1373,7 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
 
         <div className="relative min-h-0 bg-neutral-50">
           <ReactFlow
-            nodes={nodes}
+            nodes={flowNodes}
             edges={visibleEdges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
@@ -1326,7 +1392,11 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
             connectionLineStyle={{ stroke: "#111827", strokeWidth: 2 }}
             connectionMode={ConnectionMode.Loose}
             nodesDraggable={freeMoveMode}
-            onNodeDragStop={(_, node) => void saveNodePosition(node.id, node.position)}
+            onNodeDrag={(_, node) => updateFlowNodePosition(node.id, node.position)}
+            onNodeDragStop={(_, node) => {
+              updateFlowNodePosition(node.id, node.position);
+              void saveNodePosition(node.id, node.position);
+            }}
           >
             <Background color="#d4d4d4" gap={18} />
             <Controls showInteractive={false} />
@@ -1573,6 +1643,8 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
           onClose={() => setShowAnalysisSettings(false)}
           onReset={resetAnalysisSettings}
           onSave={() => void saveAnalysisSettings()}
+          onRefreshEdges={() => void refreshGeneratedEdges()}
+          isRefreshingEdges={isRefreshingEdges}
         />
       )}
 
@@ -1590,13 +1662,17 @@ function AnalysisSettingsModal({
   setForm,
   onClose,
   onReset,
-  onSave
+  onSave,
+  onRefreshEdges,
+  isRefreshingEdges
 }: {
   form: AnalysisSettingsForm;
   setForm: (form: AnalysisSettingsForm) => void;
   onClose: () => void;
   onReset: () => void;
   onSave: () => void;
+  onRefreshEdges: () => void;
+  isRefreshingEdges: boolean;
 }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/30 p-4">
@@ -1713,6 +1789,26 @@ function AnalysisSettingsModal({
               Example: Prefer method-transfer edges over broad background edges. Do not create
               edges unless the relation can be justified from both summaries.
             </p>
+          </div>
+          <div className="mt-4 border border-neutral-200 bg-neutral-50 p-3">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="text-sm font-semibold text-neutral-950">
+                  Refresh existing generated edges
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-neutral-500">
+                  Saves these settings, removes generated edges and pending suggestions, then
+                  regenerates them with the configured LLM. User-created and user-edited edges stay.
+                </p>
+              </div>
+              <button
+                className="shrink-0 border border-neutral-950 bg-white px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:border-neutral-300 disabled:text-neutral-400"
+                disabled={isRefreshingEdges}
+                onClick={onRefreshEdges}
+              >
+                {isRefreshingEdges ? "Refreshing..." : "Refresh Edges"}
+              </button>
+            </div>
           </div>
         </div>
         <div className="flex justify-between border-t border-neutral-200 px-4 py-3">
