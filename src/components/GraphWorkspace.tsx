@@ -20,6 +20,8 @@ import {
   EDGE_STYLE_MAP,
   RELATION_LABELS,
   RELATION_TYPES,
+  DEFAULT_ANALYSIS_SETTINGS,
+  type AnalysisSettings,
   type EdgeSuggestion,
   type EdgeLineStyle,
   type GraphUiSettings,
@@ -46,6 +48,19 @@ type CreateEdgeForm = EdgeForm & {
   source: string;
   target: string;
   directed: boolean;
+};
+
+type AnalysisSettingsForm = {
+  semanticEdgeLimitPerPaper: string;
+  candidateLimitPerNewPaper: string;
+  minConfidenceForAutoEdge: string;
+  minConfidenceForSuggestion: string;
+  candidateTitleWeight: string;
+  candidateKeywordWeight: string;
+  candidateSummaryWeight: string;
+  candidateMinScore: string;
+  includeZeroScoreCandidates: boolean;
+  customEdgePrompt: string;
 };
 
 type GoogleAuthStatus = {
@@ -293,7 +308,7 @@ function PaperRelationEdge({
             style={{
               transform: `translate(${labelPosX}px, ${labelPosY}px) translate(-50%, -100%)`
             }}
-            title={edge.longDescription || edge.shortDescription}
+            title={displayEdgeDescription(edge, null)}
           >
             <div
               className="edge-label-pill"
@@ -302,7 +317,7 @@ function PaperRelationEdge({
                 color: stroke
               }}
             >
-              {edge.label}
+              {displayEdgeLabel(edge)}
             </div>
           </div>
         </EdgeLabelRenderer>
@@ -341,6 +356,24 @@ function getPaperTitle(graph: GraphData | null, paperId: string) {
   return graph?.nodes.find((paper) => paper.id === paperId)?.title ?? paperId;
 }
 
+function looksCorruptText(value: string): boolean {
+  return /�|怨|諛|鍮|吏|濡|瑜|媛|쒕|쑝|[?]{2,}/.test(value);
+}
+
+function displayEdgeLabel(edge: PaperEdge): string {
+  return edge.label && !looksCorruptText(edge.label)
+    ? edge.label
+    : RELATION_LABELS[edge.relationType];
+}
+
+function displayEdgeDescription(edge: PaperEdge, graph: GraphData | null): string {
+  const description = edge.longDescription || edge.shortDescription;
+  if (description && !looksCorruptText(description)) return description;
+  return `${getPaperTitle(graph, edge.source)} ${
+    edge.directed ? "->" : "-"
+  } ${getPaperTitle(graph, edge.target)} (${RELATION_LABELS[edge.relationType]})`;
+}
+
 async function readJsonResponse<T>(response: Response): Promise<T> {
   const text = await response.text();
   if (!text) return {} as T;
@@ -368,6 +401,36 @@ function emptyCreateEdgeForm(graph: GraphData | null): CreateEdgeForm {
   };
 }
 
+function analysisSettingsForm(settings: AnalysisSettings): AnalysisSettingsForm {
+  return {
+    semanticEdgeLimitPerPaper: String(settings.semanticEdgeLimitPerPaper),
+    candidateLimitPerNewPaper: String(settings.candidateLimitPerNewPaper),
+    minConfidenceForAutoEdge: String(settings.minConfidenceForAutoEdge),
+    minConfidenceForSuggestion: String(settings.minConfidenceForSuggestion),
+    candidateTitleWeight: String(settings.candidateTitleWeight),
+    candidateKeywordWeight: String(settings.candidateKeywordWeight),
+    candidateSummaryWeight: String(settings.candidateSummaryWeight),
+    candidateMinScore: String(settings.candidateMinScore),
+    includeZeroScoreCandidates: settings.includeZeroScoreCandidates,
+    customEdgePrompt: settings.customEdgePrompt
+  };
+}
+
+function parseAnalysisSettingsForm(form: AnalysisSettingsForm): AnalysisSettings {
+  return {
+    semanticEdgeLimitPerPaper: Number(form.semanticEdgeLimitPerPaper),
+    candidateLimitPerNewPaper: Number(form.candidateLimitPerNewPaper),
+    minConfidenceForAutoEdge: Number(form.minConfidenceForAutoEdge),
+    minConfidenceForSuggestion: Number(form.minConfidenceForSuggestion),
+    candidateTitleWeight: Number(form.candidateTitleWeight),
+    candidateKeywordWeight: Number(form.candidateKeywordWeight),
+    candidateSummaryWeight: Number(form.candidateSummaryWeight),
+    candidateMinScore: Number(form.candidateMinScore),
+    includeZeroScoreCandidates: form.includeZeroScoreCandidates,
+    customEdgePrompt: form.customEdgePrompt
+  };
+}
+
 export default function GraphWorkspace({ projectId }: { projectId: string }) {
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [selected, setSelected] = useState<SelectedItem>(null);
@@ -390,8 +453,13 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
     DEFAULT_RELATION_EDGE_LINE_STYLES
   );
   const [showPaperBrowser, setShowPaperBrowser] = useState(false);
+  const [showAnalysisSettings, setShowAnalysisSettings] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [showEdgeLabels, setShowEdgeLabels] = useState(true);
   const [freeMoveMode, setFreeMoveMode] = useState(false);
+  const [analysisForm, setAnalysisForm] = useState<AnalysisSettingsForm>(
+    analysisSettingsForm(DEFAULT_ANALYSIS_SETTINGS)
+  );
 
   const startResize = (side: "left" | "right") => (event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -437,6 +505,7 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
     setShapeMode(json.graph.uiSettings?.nodeShapeMode ?? "square");
     setShowEdgeLabels(json.graph.uiSettings?.showEdgeLabels ?? true);
     setFreeMoveMode(json.graph.uiSettings?.freeMoveMode ?? false);
+    setAnalysisForm(analysisSettingsForm(json.graph.analysisSettings));
     setCreateEdgeForm((current) =>
       current.source && current.target ? current : emptyCreateEdgeForm(json.graph)
     );
@@ -444,6 +513,11 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
   }, [projectId]);
 
   useEffect(() => {
+    if (window.location.hash === "#edge-generation-settings") {
+      setShowAnalysisSettings(true);
+    } else if (window.location.hash === "#help") {
+      setShowHelp(true);
+    }
     loadGoogleAuthStatus().catch(() => setGoogleAuth({ connected: false, user: null }));
     loadGraph().catch((error) => setStatus((error as Error).message));
   }, [loadGraph, loadGoogleAuthStatus]);
@@ -840,6 +914,27 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
     setStatus("Settings saved to graph.json");
   };
 
+  const saveAnalysisSettings = async () => {
+    const response = await fetch(`/api/projects/${projectId}/graph`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ analysisSettings: parseAnalysisSettingsForm(analysisForm) })
+    });
+    const json = (await response.json()) as { success: boolean; graph?: GraphData; error?: string };
+    if (!json.success || !json.graph) {
+      setStatus(json.error ?? "ANALYSIS_SETTINGS_SAVE_FAILED");
+      return;
+    }
+    setGraph(json.graph);
+    setAnalysisForm(analysisSettingsForm(json.graph.analysisSettings));
+    setShowAnalysisSettings(false);
+    setStatus("Edge generation settings saved for future uploads");
+  };
+
+  const resetAnalysisSettings = () => {
+    setAnalysisForm(analysisSettingsForm(DEFAULT_ANALYSIS_SETTINGS));
+  };
+
   const updateRelationColor = (relationType: RelationType, color: string) => {
     const next = { ...relationColors, [relationType]: color };
     setRelationColors(next);
@@ -1161,6 +1256,13 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
                   <span>노드 위치 리셋</span>
                   <span className="text-neutral-500">reset</span>
                 </button>
+                <button
+                  className="flex w-full items-center justify-between border border-neutral-950 px-2 py-2 text-left text-sm font-semibold hover:bg-neutral-100"
+                  onClick={() => setShowAnalysisSettings(true)}
+                >
+                  <span>Edge generation details</span>
+                  <span className="text-neutral-500">more</span>
+                </button>
               </div>
             </div>
 
@@ -1238,16 +1340,22 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
           {hoveredEdge && (
             <div className="pointer-events-none absolute bottom-12 left-1/2 z-20 w-[min(520px,40vw)] -translate-x-1/2 border border-neutral-300 bg-white p-3 text-sm shadow-md">
               <div className="font-semibold text-neutral-950">
-                {hoveredEdge.label} / {RELATION_LABELS[hoveredEdge.relationType]}
+                {displayEdgeLabel(hoveredEdge)} / {RELATION_LABELS[hoveredEdge.relationType]}
               </div>
               <div className="mt-1 text-neutral-700">
-                {hoveredEdge.longDescription || hoveredEdge.shortDescription}
+                {displayEdgeDescription(hoveredEdge, graph)}
               </div>
               <div className="mt-2 text-xs text-neutral-500">
                 confidence {hoveredEdge.confidence.toFixed(2)} · {hoveredEdge.relationSource}
               </div>
             </div>
           )}
+          <button
+            className="absolute bottom-4 right-4 z-30 border border-neutral-950 bg-white px-4 py-2 text-sm font-semibold shadow-md hover:bg-neutral-100"
+            onClick={() => setShowHelp(true)}
+          >
+            도움말
+          </button>
         </div>
 
         <div
@@ -1317,8 +1425,10 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
                       className="block w-full border border-neutral-200 p-2 text-left text-sm hover:bg-neutral-100"
                       onClick={() => setSelected({ kind: "edge", edge })}
                     >
-                      <div className="font-medium">{edge.label}</div>
-                      <div className="text-xs text-neutral-500">{edge.shortDescription}</div>
+                      <div className="font-medium">{displayEdgeLabel(edge)}</div>
+                      <div className="text-xs text-neutral-500">
+                        {displayEdgeDescription(edge, graph)}
+                      </div>
                     </button>
                   ))}
                   {!selectedPaperEdges.length && (
@@ -1343,7 +1453,7 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
           {selected?.kind === "edge" && (
             <div className="space-y-4">
               <div>
-                <h2 className="text-lg font-semibold">{selected.edge.label}</h2>
+                <h2 className="text-lg font-semibold">{displayEdgeLabel(selected.edge)}</h2>
                 <div className="text-sm text-neutral-500">
                   {getPaperTitle(graph, selected.edge.source)} {selected.edge.directed ? "->" : "-"}{" "}
                   {getPaperTitle(graph, selected.edge.target)}
@@ -1356,8 +1466,18 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
                     label="Relation Type"
                     value={RELATION_LABELS[selected.edge.relationType]}
                   />
-                  <DetailBlock label="Short Description" value={selected.edge.shortDescription} />
-                  <DetailBlock label="Long Description" value={selected.edge.longDescription} />
+                  <DetailBlock
+                    label="Short Description"
+                    value={
+                      looksCorruptText(selected.edge.shortDescription)
+                        ? displayEdgeDescription(selected.edge, graph)
+                        : selected.edge.shortDescription
+                    }
+                  />
+                  <DetailBlock
+                    label="Long Description"
+                    value={displayEdgeDescription(selected.edge, graph)}
+                  />
                   <DetailBlock label="Confidence" value={selected.edge.confidence.toFixed(2)} />
                   <DetailBlock label="Relation Source" value={selected.edge.relationSource} />
                   <DetailBlock label="Direction" value={selected.edge.directionMeaning} />
@@ -1446,10 +1566,265 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
         />
       )}
 
+      {showAnalysisSettings && (
+        <AnalysisSettingsModal
+          form={analysisForm}
+          setForm={setAnalysisForm}
+          onClose={() => setShowAnalysisSettings(false)}
+          onReset={resetAnalysisSettings}
+          onSave={() => void saveAnalysisSettings()}
+        />
+      )}
+
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+
       <footer className="h-8 shrink-0 border-t border-neutral-200 bg-white px-4 py-1 text-xs text-neutral-500">
         {status}
       </footer>
     </main>
+  );
+}
+
+function AnalysisSettingsModal({
+  form,
+  setForm,
+  onClose,
+  onReset,
+  onSave
+}: {
+  form: AnalysisSettingsForm;
+  setForm: (form: AnalysisSettingsForm) => void;
+  onClose: () => void;
+  onReset: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/30 p-4">
+      <div className="mx-auto flex h-full max-w-3xl flex-col border border-neutral-300 bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
+          <div>
+            <h2 className="text-base font-semibold">Edge Generation Settings</h2>
+            <p className="mt-1 text-xs text-neutral-500">
+              Saved in graph.json and applied only when a new paper is uploaded.
+            </p>
+          </div>
+          <button className="border border-neutral-300 px-3 py-1.5 text-sm" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto p-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <NumberInput
+              label="Max auto edges per new paper"
+              value={form.semanticEdgeLimitPerPaper}
+              min={1}
+              max={20}
+              step={1}
+              onChange={(semanticEdgeLimitPerPaper) =>
+                setForm({ ...form, semanticEdgeLimitPerPaper })
+              }
+            />
+            <NumberInput
+              label="Candidate papers sent to LLM"
+              value={form.candidateLimitPerNewPaper}
+              min={1}
+              max={50}
+              step={1}
+              onChange={(candidateLimitPerNewPaper) =>
+                setForm({ ...form, candidateLimitPerNewPaper })
+              }
+            />
+            <NumberInput
+              label="Auto edge confidence threshold"
+              value={form.minConfidenceForAutoEdge}
+              min={0}
+              max={1}
+              step={0.01}
+              onChange={(minConfidenceForAutoEdge) =>
+                setForm({ ...form, minConfidenceForAutoEdge })
+              }
+            />
+            <NumberInput
+              label="Suggestion confidence threshold"
+              value={form.minConfidenceForSuggestion}
+              min={0}
+              max={1}
+              step={0.01}
+              onChange={(minConfidenceForSuggestion) =>
+                setForm({ ...form, minConfidenceForSuggestion })
+              }
+            />
+            <NumberInput
+              label="Title match weight"
+              value={form.candidateTitleWeight}
+              min={0}
+              max={10}
+              step={0.1}
+              onChange={(candidateTitleWeight) =>
+                setForm({ ...form, candidateTitleWeight })
+              }
+            />
+            <NumberInput
+              label="Keyword match weight"
+              value={form.candidateKeywordWeight}
+              min={0}
+              max={10}
+              step={0.1}
+              onChange={(candidateKeywordWeight) =>
+                setForm({ ...form, candidateKeywordWeight })
+              }
+            />
+            <NumberInput
+              label="Summary match weight"
+              value={form.candidateSummaryWeight}
+              min={0}
+              max={10}
+              step={0.1}
+              onChange={(candidateSummaryWeight) =>
+                setForm({ ...form, candidateSummaryWeight })
+              }
+            />
+            <NumberInput
+              label="Minimum candidate score"
+              value={form.candidateMinScore}
+              min={0}
+              max={1}
+              step={0.01}
+              onChange={(candidateMinScore) => setForm({ ...form, candidateMinScore })}
+            />
+          </div>
+          <label className="mt-4 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={form.includeZeroScoreCandidates}
+              onChange={(event) =>
+                setForm({ ...form, includeZeroScoreCandidates: event.target.checked })
+              }
+            />
+            Include fallback candidates even when lexical score is zero
+          </label>
+          <div className="mt-4">
+            <TextArea
+              label="Custom edge policy prompt"
+              value={form.customEdgePrompt}
+              onChange={(customEdgePrompt) => setForm({ ...form, customEdgePrompt })}
+            />
+            <p className="mt-1 text-xs leading-relaxed text-neutral-500">
+              Example: Prefer method-transfer edges over broad background edges. Do not create
+              edges unless the relation can be justified from both summaries.
+            </p>
+          </div>
+        </div>
+        <div className="flex justify-between border-t border-neutral-200 px-4 py-3">
+          <button className="border border-neutral-300 px-3 py-2 text-sm" onClick={onReset}>
+            Reset defaults
+          </button>
+          <div className="flex gap-2">
+            <button className="border border-neutral-300 px-3 py-2 text-sm" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              className="border border-neutral-950 bg-neutral-950 px-3 py-2 text-sm text-white"
+              onClick={onSave}
+            >
+              Save Settings
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HelpModal({ onClose }: { onClose: () => void }) {
+  const sections = [
+    {
+      title: "논문 업로드와 자동 분석",
+      body:
+        "Upload PDF 버튼으로 논문을 올리면 원본 PDF가 현재 저장소에 보관되고, 앱이 본문 텍스트를 추출한 뒤 LLM이 제목, 저자, 연도, 초록, 요약, 키워드를 구조화합니다. 분석이 끝나면 새 논문 노드가 그래프에 추가되어 이후 검색, 관계 비교, PDF 다시 열기에 활용됩니다."
+    },
+    {
+      title: "자동 엣지 생성",
+      body:
+        "새 논문이 들어올 때마다 기존 논문들의 제목, 키워드, 요약을 기준으로 후보 논문을 고르고, LLM이 두 논문 사이의 관계를 판단합니다. 확장, 선행 연구, 방법 사용, 비교, 개념 연결 같은 관계 타입을 사용하며, 신뢰도가 충분하면 자동 엣지로 저장하고 애매하면 제안 목록에 남깁니다."
+    },
+    {
+      title: "그래프 탐색",
+      body:
+        "가운데 캔버스는 논문 지식 지도를 보여줍니다. 노드는 논문이고 선은 관계입니다. 확대, 축소, 미니맵 이동을 통해 큰 그래프를 빠르게 훑을 수 있으며, 엣지에 마우스를 올리면 관계 설명과 신뢰도를 바로 확인할 수 있습니다."
+    },
+    {
+      title: "논문 목록과 검색",
+      body:
+        "왼쪽 패널에서는 저장된 논문을 목록으로 보고 제목 기준으로 검색할 수 있습니다. 목록의 논문을 누르면 오른쪽 상세 패널에서 요약, 키워드, 연결된 엣지, 원본 PDF 링크를 확인할 수 있습니다."
+    },
+    {
+      title: "관계 필터와 시각 스타일",
+      body:
+        "Relation Filters에서 관계 타입별 표시 여부를 켜고 끌 수 있습니다. 각 관계 타입마다 색상과 선 모양도 바꿀 수 있어 발표용, 검토용, 연구 정리용 그래프를 원하는 방식으로 읽기 쉽게 만들 수 있습니다."
+    },
+    {
+      title: "수동 엣지 생성과 수정",
+      body:
+        "자동 분석이 놓친 관계가 있으면 + 사용자 정의 edge 만들기 또는 그래프에서 노드끼리 드래그해 직접 연결할 수 있습니다. 오른쪽 패널에서 관계 타입, 라벨, 짧은 설명, 긴 설명을 수정하면 graph.json에 영구 저장됩니다."
+    },
+    {
+      title: "제안 검토",
+      body:
+        "LLM이 기존 엣지와 충돌하거나 신뢰도가 자동 저장 기준보다 낮다고 판단한 관계는 Pending Suggestions에 들어갑니다. 사용자는 Accept 또는 Reject로 그래프에 반영할지 직접 결정할 수 있어 자동화와 사용자의 판단을 함께 사용할 수 있습니다."
+    },
+    {
+      title: "저장소와 Google Drive",
+      body:
+        "기본 로컬 모드에서는 PDF와 graph.json이 local_data 아래에 저장됩니다. Google Drive를 연결하고 저장 백엔드를 Drive로 설정하면 같은 그래프와 설정이 Drive에 저장되어 다른 세션에서도 이어서 사용할 수 있습니다."
+    },
+    {
+      title: "엣지 생성 세부 설정",
+      body:
+        "Settings의 Edge generation details에서 후보 논문 수, 자동 엣지 개수, 신뢰도 기준, 제목/키워드/요약 가중치, 커스텀 정책 프롬프트를 조정할 수 있습니다. 이 설정은 새 논문이 업로드될 때만 적용되며 기존 그래프를 자동으로 다시 쓰지 않습니다."
+    },
+    {
+      title: "화면 설정",
+      body:
+        "Settings에서 노드 모양, 엣지 라벨 표시, 자유 이동 모드, 노드 위치 초기화를 제어할 수 있습니다. 자유 이동 모드를 켜면 노드를 직접 배치할 수 있고, 위치는 graph.json에 저장되어 다음 접속 때도 유지됩니다."
+    }
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/35 p-4">
+      <div className="mx-auto flex h-full max-w-4xl flex-col border border-neutral-300 bg-white shadow-xl">
+        <div className="flex items-start justify-between border-b border-neutral-200 px-5 py-4">
+          <div>
+            <h2 className="text-lg font-semibold">Deepen 사용 도움말</h2>
+            <p className="mt-1 text-sm leading-relaxed text-neutral-500">
+              논문을 업로드하고, 요약하고, 관계 그래프로 정리하는 전체 흐름을 기능별로 설명합니다.
+            </p>
+          </div>
+          <button
+            className="ml-4 flex h-9 w-9 shrink-0 items-center justify-center border border-neutral-300 text-lg font-semibold hover:bg-neutral-100"
+            onClick={onClose}
+            aria-label="도움말 닫기"
+            title="닫기"
+          >
+            X
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto px-5 py-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            {sections.map((section) => (
+              <section key={section.title} className="border border-neutral-200 bg-white p-4">
+                <h3 className="text-sm font-semibold text-neutral-950">{section.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-neutral-600">{section.body}</p>
+              </section>
+            ))}
+          </div>
+        </div>
+        <div className="border-t border-neutral-200 px-5 py-3 text-xs leading-relaxed text-neutral-500">
+          설정과 그래프 데이터는 현재 프로젝트의 graph.json에 저장됩니다. 새 PDF를 넣을 때 자동 분석 설정이 적용되고,
+          이미 저장된 엣지는 사용자가 직접 수정하거나 삭제하기 전까지 유지됩니다.
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1660,6 +2035,37 @@ function TextInput({
       {label}
       <input
         value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 w-full border border-neutral-300 px-2 py-2"
+      />
+    </label>
+  );
+}
+
+function NumberInput({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange
+}: {
+  label: string;
+  value: string;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block text-sm">
+      {label}
+      <input
+        type="number"
+        value={value}
+        min={min}
+        max={max}
+        step={step}
         onChange={(event) => onChange(event.target.value)}
         className="mt-1 w-full border border-neutral-300 px-2 py-2"
       />

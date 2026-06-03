@@ -12,11 +12,12 @@ src/app/globals.css
 
 The page has:
 
-- top bar
-- left sidebar
-- graph canvas
-- right detail panel
-- bottom status bar
+- top bar;
+- left sidebar;
+- graph canvas;
+- right detail panel;
+- bottom status bar;
+- bottom-right `도움말` button.
 
 Left and right panels are resizable. Their font size increases as the panel gets wider.
 
@@ -26,19 +27,13 @@ Left and right panels are resizable. Their font size increases as the panel gets
 
 Supported display modes:
 
-- square node
-- circle node
+- square node;
+- circle node.
 
-The left sidebar has a node shape toggle.
+Custom nodes must expose handles for edges. Current handles:
 
-Important React Flow rule:
-
-Custom nodes must expose handles for edges.
-
-Current node handles:
-
-- target handle on the left
-- source handle on the right
+- target handle on the left;
+- source handle on the right.
 
 If these are removed or hidden incorrectly, edges can disappear.
 
@@ -58,28 +53,27 @@ src/components/GraphWorkspace.tsx
 
 Current behavior:
 
-- relation label is shown in a small pill above the edge line
-- edge line uses relation-specific grayscale/dark accent color
-- confidence controls opacity and line strength
-- directed edges use a small SVG marker arrow
-- hover shows a floating explanation panel
-- click opens the edge detail panel
-- detail panel can delete an edge after confirmation
-- dragging from one paper node handle to another creates a user-defined edge immediately
-- edge paths use curved quadratic paths with per-edge offsets so dense labels and parallel edges separate better
-- label placement uses an offset normal to the curved path instead of sitting directly on the line
-- edge labels can be hidden from the settings panel when the graph becomes dense
+- relation label is shown in a compact pill above the edge line;
+- edge line uses relation-specific color and line style;
+- confidence controls opacity and line strength;
+- directed edges use a small SVG marker arrow;
+- hover shows a floating explanation panel;
+- click opens the edge detail panel;
+- detail panel can edit or delete an edge;
+- dragging from one paper node handle to another creates a user-defined edge;
+- edge paths use curved quadratic paths with per-edge offsets so dense labels and parallel edges separate better;
+- labels can be hidden globally from Settings when the graph becomes dense.
 
 ## Edge Labels
 
 Before hover:
 
-- the graph shows only a compact relation label
+- the graph shows only a compact relation label.
 
 On hover:
 
-- the graph shows detailed reason/description
-- confidence and relation source are shown
+- the graph shows detailed reason/description;
+- confidence and relation source are shown.
 
 This keeps the canvas readable while preserving LLM rationale.
 
@@ -89,27 +83,36 @@ Relation filters are in the left sidebar.
 
 Behavior:
 
-- no active filters means show all relation types
-- selecting relation types filters edges
-- visible nodes are derived from visible edges when filters are active
-- `custom` relation exists for user-defined edges
-- each relation filter row also includes its edge color picker
-- each relation filter row also includes its line style picker: solid, dashed, dotted
-- color changes are saved into `graph.json` under `uiSettings.edgeColors`
-- line style changes are saved into `graph.json` under `uiSettings.edgeLineStyles`
+- no active filters means show all relation types;
+- selecting relation types filters edges;
+- visible nodes are derived from visible edges when filters are active;
+- `custom` relation exists for user-defined edges;
+- each relation filter row includes its edge color picker;
+- each relation filter row includes its line style picker: solid, dashed, dotted;
+- color changes are saved under `uiSettings.edgeColors`;
+- line style changes are saved under `uiSettings.edgeLineStyles`.
 
 ## Settings Panel
 
-The previous standalone node shape section is now a compact `설정` panel.
+The Settings panel controls persistent project preferences.
 
 Settings:
 
-- node shape: square or circle
-- edge label visibility: hide labels when they overlap in dense graphs
-- free move mode: enables React Flow node dragging
-- node position reset: clears saved node coordinates
+- node shape: square or circle;
+- edge label visibility: hide labels when they overlap in dense graphs;
+- free move mode: enables React Flow node dragging;
+- node position reset: clears saved node coordinates;
+- edge generation details: opens a modal for candidate scoring, confidence thresholds, and custom edge prompt policy.
 
 When free move mode is enabled, dragging a node saves its final position into `graph.json` under `uiSettings.nodePositions`.
+
+Edge generation settings are saved under `analysisSettings`. They apply only when a new paper is uploaded and analyzed.
+
+## Help Modal
+
+The bottom-right `도움말` button opens a centered Korean help modal. It explains the app's main user-facing features, including upload, graph reading, edge editing, suggestions, settings, Google Drive mode, and duplicate warnings.
+
+The same modal can be opened with the `#help` URL hash.
 
 ## Edge Editing
 
@@ -117,17 +120,17 @@ Clicking an edge opens the right detail panel.
 
 Editable fields:
 
-- `relationType`
-- `label`
-- `shortDescription`
-- `longDescription`
+- `relationType`;
+- `label`;
+- `shortDescription`;
+- `longDescription`.
 
 Immutable fields:
 
-- `id`
-- `source`
-- `target`
-- `createdAt`
+- `id`;
+- `source`;
+- `target`;
+- `createdAt`.
 
 Saving an edit calls:
 
@@ -166,20 +169,13 @@ Users can also create an edge by dragging from a source handle to another paper.
 
 ## Paper Deletion And Duplicate Warnings
 
-Clicking a paper opens the right detail panel. The panel includes a destructive
-`Delete Paper Node` action. It removes the paper from `graph.json` along with
-connected edges and related suggestions, but it does not delete the original PDF
-from local storage or Google Drive.
+Clicking a paper opens the right detail panel. The panel includes a destructive `Delete Paper Node` action. It removes the paper from `graph.json` along with connected edges and related suggestions, but it does not delete the original PDF from local storage or Google Drive.
 
-Before upload, the UI checks the current graph for a paper with the same original
-filename or a title matching the PDF filename without `.pdf`. If a likely
-duplicate exists, the user must confirm before upload continues.
+Before upload, the UI checks the current graph for a paper with the same original filename or a title matching the PDF filename without `.pdf`. If a likely duplicate exists, the user must confirm before upload continues.
 
 ## Google Drive Session
 
-When Google Drive is connected, the header shows the connected email and a
-`Logout` button. Logout clears the local app session cookie; it does not delete
-Drive files, graph data, or stored OAuth tokens.
+When Google Drive is connected, the header shows the connected email and a `Logout` button. Logout clears the local app session cookie; it does not delete Drive files, graph data, or stored OAuth tokens.
 
 ## Large Paper Lists
 
@@ -193,8 +189,8 @@ Pending suggestions are shown in the left sidebar.
 
 Actions:
 
-- accept
-- reject
+- accept;
+- reject.
 
 These call the suggestion API routes and persist the graph.
 

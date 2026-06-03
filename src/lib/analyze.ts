@@ -115,13 +115,14 @@ async function analyzeStoredPaper(params: {
     newPaper,
     existingNodes: graph.nodes,
     existingEdges: graph.edges,
-    limit: graph.analysisSettings.candidateLimitPerNewPaper
+    settings: graph.analysisSettings
   });
   const relationResult = await extractRelationsWithLLM({
     newPaper,
     candidates,
     existingEdges: graph.edges,
-    edgeLimit: graph.analysisSettings.semanticEdgeLimitPerPaper
+    edgeLimit: graph.analysisSettings.semanticEdgeLimitPerPaper,
+    customEdgePrompt: graph.analysisSettings.customEdgePrompt
   });
   const mergedGraph = mergeGraph({
     oldGraph: graph,
