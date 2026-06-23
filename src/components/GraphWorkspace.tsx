@@ -447,6 +447,18 @@ function clientId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`;
 }
 
+function friendlyChatErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const isProviderBusy =
+    /LLM_REQUEST_FAILED|UNAVAILABLE|high demand|try again later|503|429|RESOURCE_EXHAUSTED/i.test(
+      message
+    );
+
+  return isProviderBusy
+    ? "현재 LLM 서버 요청량이 많아 답변을 만들지 못했습니다. 잠시 후 다시 시도해주세요."
+    : `챗봇 응답을 만들지 못했습니다: ${message}`;
+}
+
 export default function GraphWorkspace({ projectId }: { projectId: string }) {
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [selected, setSelected] = useState<SelectedItem>(null);
@@ -1208,7 +1220,7 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
         {
           id: clientId("chat_assistant"),
           role: "assistant",
-          content: `챗봇 응답을 만들지 못했습니다: ${(error as Error).message}`
+          content: friendlyChatErrorMessage(error)
         }
       ]);
     } finally {
