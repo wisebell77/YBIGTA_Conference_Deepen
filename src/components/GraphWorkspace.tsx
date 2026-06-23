@@ -30,7 +30,10 @@ import {
   type GraphData,
   type PaperEdge,
   type PaperNode as PaperNodeType,
-  type RelationType
+  type RelationType,
+  type ChatProposedAction,
+  type GraphChatMessage,
+  type GraphChatResult
 } from "@/lib/types";
 
 type SelectedItem =
@@ -69,6 +72,13 @@ type GoogleAuthStatus = {
   connected: boolean;
   user: { email: string; name?: string | null } | null;
 };
+
+type ChatUiMessage = GraphChatMessage & {
+  id: string;
+  proposedActions?: ChatProposedAction[];
+};
+
+type ChatActionStatus = Record<string, "applied" | "failed">;
 
 type DriveUploadResult = {
   id?: string;
@@ -433,6 +443,10 @@ function parseAnalysisSettingsForm(form: AnalysisSettingsForm): AnalysisSettings
   };
 }
 
+function clientId(prefix: string): string {
+  return `${prefix}_${crypto.randomUUID()}`;
+}
+
 export default function GraphWorkspace({ projectId }: { projectId: string }) {
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [selected, setSelected] = useState<SelectedItem>(null);
@@ -461,6 +475,14 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
   const [freeMoveMode, setFreeMoveMode] = useState(false);
   const [flowNodes, setFlowNodes] = useState<Node[]>([]);
   const [isRefreshingEdges, setIsRefreshingEdges] = useState(false);
+  const [translatedPaperIds, setTranslatedPaperIds] = useState<Set<string>>(new Set());
+  const [translatingPaperId, setTranslatingPaperId] = useState<string | null>(null);
+  const [showChat, setShowChat] = useState(false);
+  const [chatInput, setChatInput] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatUiMessage[]>([]);
+  const [isChatSending, setIsChatSending] = useState(false);
+  const [applyingChatActionId, setApplyingChatActionId] = useState<string | null>(null);
+  const [chatActionStatus, setChatActionStatus] = useState<ChatActionStatus>({});
   const [analysisForm, setAnalysisForm] = useState<AnalysisSettingsForm>(
     analysisSettingsForm(DEFAULT_ANALYSIS_SETTINGS)
   );
@@ -1104,6 +1126,148 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
     setStatus(action === "accept" ? "Suggestion accepted" : "Suggestion rejected");
   };
 
+  const togglePaperTranslation = async (paper: PaperNodeType) => {
+    if (translatedPaperIds.has(paper.id)) {
+      setTranslatedPaperIds((current) => {
+        const next = new Set(current);
+        next.delete(paper.id);
+        return next;
+      });
+      return;
+    }
+
+    if (paper.summaryKo) {
+      setTranslatedPaperIds((current) => new Set([...current, paper.id]));
+      return;
+    }
+
+    setTranslatingPaperId(paper.id);
+    try {
+      const response = await fetch(
+        `/api/projects/${projectId}/papers/${paper.id}/translate-summary`,
+        { method: "POST" }
+      );
+      const json = (await response.json()) as {
+        success: boolean;
+        paper?: PaperNodeType;
+        graph?: GraphData;
+        error?: string;
+      };
+      if (!json.success || !json.graph || !json.paper) {
+        setStatus(json.error ?? "SUMMARY_TRANSLATION_FAILED");
+        return;
+      }
+      setGraph(json.graph);
+      setSelected({ kind: "paper", paper: json.paper });
+      setTranslatedPaperIds((current) => new Set([...current, json.paper!.id]));
+      setStatus("Summary translation saved to graph.json");
+    } catch (error) {
+      setStatus((error as Error).message);
+    } finally {
+      setTranslatingPaperId(null);
+    }
+  };
+
+  const sendChatMessage = async () => {
+    const content = chatInput.trim();
+    if (!content || isChatSending) return;
+    const userMessage: ChatUiMessage = {
+      id: clientId("chat_user"),
+      role: "user",
+      content
+    };
+    const nextMessages = [...chatMessages, userMessage];
+    setChatMessages(nextMessages);
+    setChatInput("");
+    setIsChatSending(true);
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: nextMessages.map(({ role, content }) => ({ role, content }))
+        })
+      });
+      const json = (await response.json()) as ({ success: boolean; error?: string } & Partial<GraphChatResult>);
+      if (!json.success || !json.answer) {
+        throw new Error(json.error ?? "CHAT_RESPONSE_FAILED");
+      }
+      setChatMessages((current) => [
+        ...current,
+        {
+          id: clientId("chat_assistant"),
+          role: "assistant",
+          content: json.answer ?? "",
+          proposedActions: json.proposedActions ?? []
+        }
+      ]);
+    } catch (error) {
+      setChatMessages((current) => [
+        ...current,
+        {
+          id: clientId("chat_assistant"),
+          role: "assistant",
+          content: `챗봇 응답을 만들지 못했습니다: ${(error as Error).message}`
+        }
+      ]);
+    } finally {
+      setIsChatSending(false);
+    }
+  };
+
+  const applyChatAction = async (action: ChatProposedAction) => {
+    if (chatActionStatus[action.id] === "applied") return;
+    setApplyingChatActionId(action.id);
+    try {
+      if (action.type === "update_edge") {
+        const response = await fetch(`/api/projects/${projectId}/edges/${action.edgeId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(action.patch)
+        });
+        const json = (await response.json()) as {
+          success: boolean;
+          edge?: PaperEdge;
+          graph?: GraphData;
+          error?: string;
+        };
+        if (!json.success || !json.graph || !json.edge) {
+          throw new Error(json.error ?? "CHAT_EDGE_UPDATE_FAILED");
+        }
+        setGraph(json.graph);
+        setSelected({ kind: "edge", edge: json.edge });
+        setChatActionStatus((current) => ({ ...current, [action.id]: "applied" }));
+        setStatus("Chat action applied: edge updated");
+        return;
+      }
+
+      const response = await fetch(`/api/projects/${projectId}/edges`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(action.input)
+      });
+      const json = (await response.json()) as {
+        success: boolean;
+        edge?: PaperEdge;
+        graph?: GraphData;
+        error?: string;
+      };
+      if (!json.success || !json.graph || !json.edge) {
+        throw new Error(json.error ?? "CHAT_EDGE_CREATE_FAILED");
+      }
+      setGraph(json.graph);
+      setSelected({ kind: "edge", edge: json.edge });
+      setChatActionStatus((current) => ({ ...current, [action.id]: "applied" }));
+      setStatus("Chat action applied: edge created");
+    } catch (error) {
+      setChatActionStatus((current) => ({ ...current, [action.id]: "failed" }));
+      setStatus((error as Error).message);
+    } finally {
+      setApplyingChatActionId(null);
+    }
+  };
+
   return (
     <main className="flex h-screen flex-col bg-neutral-50 text-neutral-950">
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-4">
@@ -1435,12 +1599,20 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
               </div>
             </div>
           )}
-          <button
-            className="absolute bottom-4 right-4 z-30 border border-neutral-950 bg-white px-4 py-2 text-sm font-semibold shadow-md hover:bg-neutral-100"
-            onClick={() => setShowHelp(true)}
-          >
-            도움말
-          </button>
+          <div className="absolute bottom-4 right-4 z-30 flex gap-2">
+            <button
+              className="border border-neutral-950 bg-white px-4 py-2 text-sm font-semibold shadow-md hover:bg-neutral-100"
+              onClick={() => setShowChat(true)}
+            >
+              챗봇
+            </button>
+            <button
+              className="border border-neutral-950 bg-white px-4 py-2 text-sm font-semibold shadow-md hover:bg-neutral-100"
+              onClick={() => setShowHelp(true)}
+            >
+              도움말
+            </button>
+          </div>
         </div>
 
         <div
@@ -1480,7 +1652,27 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
                   {selected.paper.year ?? "Unknown year"}
                 </div>
               </div>
-              <DetailBlock label="Summary" value={selected.paper.summary} />
+              <div>
+                <div className="mb-1 flex items-center gap-2">
+                  <div className="text-xs font-semibold uppercase text-neutral-500">Summary</div>
+                  <button
+                    className="text-xs font-semibold text-neutral-950 underline disabled:text-neutral-400"
+                    disabled={translatingPaperId === selected.paper.id}
+                    onClick={() => void togglePaperTranslation(selected.paper)}
+                  >
+                    {translatingPaperId === selected.paper.id
+                      ? "번역 중"
+                      : translatedPaperIds.has(selected.paper.id)
+                        ? "원문"
+                        : "번역"}
+                  </button>
+                </div>
+                <div className="whitespace-pre-wrap text-sm leading-relaxed text-neutral-800">
+                  {translatedPaperIds.has(selected.paper.id) && selected.paper.summaryKo
+                    ? selected.paper.summaryKo
+                    : selected.paper.summary}
+                </div>
+              </div>
               <DetailBlock label="Keywords" value={selected.paper.keywords.join(", ") || "None"} />
               <div>
                 <div className="mb-1 text-xs font-semibold uppercase text-neutral-500">
@@ -1660,6 +1852,20 @@ export default function GraphWorkspace({ projectId }: { projectId: string }) {
           onSave={() => void saveAnalysisSettings()}
           onRefreshEdges={() => void refreshGeneratedEdges()}
           isRefreshingEdges={isRefreshingEdges}
+        />
+      )}
+
+      {showChat && (
+        <ChatModal
+          messages={chatMessages}
+          input={chatInput}
+          setInput={setChatInput}
+          isSending={isChatSending}
+          actionStatus={chatActionStatus}
+          applyingActionId={applyingChatActionId}
+          onClose={() => setShowChat(false)}
+          onSend={() => void sendChatMessage()}
+          onApplyAction={(action) => void applyChatAction(action)}
         />
       )}
 
@@ -1843,6 +2049,141 @@ function AnalysisSettingsModal({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ChatModal({
+  messages,
+  input,
+  setInput,
+  isSending,
+  actionStatus,
+  applyingActionId,
+  onClose,
+  onSend,
+  onApplyAction
+}: {
+  messages: ChatUiMessage[];
+  input: string;
+  setInput: (value: string) => void;
+  isSending: boolean;
+  actionStatus: ChatActionStatus;
+  applyingActionId: string | null;
+  onClose: () => void;
+  onSend: () => void;
+  onApplyAction: (action: ChatProposedAction) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-end bg-black/20 p-4">
+      <div className="flex h-[min(720px,86vh)] w-[min(520px,92vw)] flex-col border border-neutral-300 bg-white shadow-xl">
+        <div className="flex items-start justify-between border-b border-neutral-200 px-4 py-3">
+          <div>
+            <h2 className="text-base font-semibold">Graph Chatbot</h2>
+            <p className="mt-1 text-xs leading-relaxed text-neutral-500">
+              현재 graph.json의 논문과 엣지를 참고해 답변합니다. 수정은 제안만 하고, 적용은 사용자가 승인해야 합니다.
+            </p>
+          </div>
+          <button className="border border-neutral-300 px-3 py-1.5 text-sm" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto p-3">
+          {!messages.length && (
+            <div className="border border-neutral-200 bg-neutral-50 p-3 text-sm leading-relaxed text-neutral-600">
+              예: &quot;RAG를 이해하려면 어떤 논문을 먼저 읽어야 해?&quot;,
+              &quot;CoT와 ReAct 관계 설명을 더 정확히 고쳐줘.&quot;
+            </div>
+          )}
+          <div className="space-y-3">
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={[
+                  "border p-3 text-sm leading-relaxed",
+                  message.role === "user"
+                    ? "ml-8 border-neutral-950 bg-neutral-950 text-white"
+                    : "mr-8 border-neutral-200 bg-white text-neutral-800"
+                ].join(" ")}
+              >
+                <div className="whitespace-pre-wrap">{message.content}</div>
+                {message.proposedActions?.length ? (
+                  <div className="mt-3 space-y-2">
+                    {message.proposedActions.map((action) => (
+                      <ChatActionCard
+                        key={action.id}
+                        action={action}
+                        status={actionStatus[action.id]}
+                        isApplying={applyingActionId === action.id}
+                        onApply={() => onApplyAction(action)}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+            {isSending && (
+              <div className="mr-8 border border-neutral-200 bg-white p-3 text-sm text-neutral-500">
+                답변 생성 중...
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="border-t border-neutral-200 p-3">
+          <textarea
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                onSend();
+              }
+            }}
+            placeholder="그래프에 대해 질문하거나, 관계 수정안을 요청하세요."
+            className="h-24 w-full resize-none border border-neutral-300 p-2 text-sm outline-none focus:border-neutral-950"
+          />
+          <div className="mt-2 flex items-center justify-between">
+            <span className="text-xs text-neutral-500">Enter 전송 · Shift+Enter 줄바꿈</span>
+            <button
+              className="border border-neutral-950 bg-neutral-950 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:border-neutral-300 disabled:bg-neutral-300"
+              disabled={!input.trim() || isSending}
+              onClick={onSend}
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChatActionCard({
+  action,
+  status,
+  isApplying,
+  onApply
+}: {
+  action: ChatProposedAction;
+  status?: "applied" | "failed";
+  isApplying: boolean;
+  onApply: () => void;
+}) {
+  const title = action.type === "update_edge" ? "엣지 수정 제안" : "새 엣지 생성 제안";
+  const target = action.type === "update_edge" ? action.edgeId : `${action.input.source} -> ${action.input.target}`;
+  return (
+    <div className="border border-neutral-300 bg-neutral-50 p-2 text-xs text-neutral-700">
+      <div className="font-semibold text-neutral-950">{title}</div>
+      <div className="mt-1 break-all text-neutral-500">{target}</div>
+      <p className="mt-1 leading-relaxed">{action.reason}</p>
+      <button
+        className="mt-2 border border-neutral-950 bg-white px-2 py-1 font-semibold text-neutral-950 disabled:cursor-not-allowed disabled:border-neutral-300 disabled:text-neutral-400"
+        disabled={isApplying || status === "applied"}
+        onClick={onApply}
+      >
+        {status === "applied" ? "적용됨" : isApplying ? "적용 중" : "적용"}
+      </button>
+      {status === "failed" && <span className="ml-2 text-red-700">적용 실패</span>}
     </div>
   );
 }

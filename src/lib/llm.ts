@@ -13,6 +13,11 @@ type MetadataResult = {
   embeddingText: string;
 };
 
+type SummaryTranslationResult = {
+  summaryKo: string;
+  shortSummaryKo: string;
+};
+
 type RawRelationEdge = Omit<
   PaperEdge,
   "id" | "llmGenerated" | "userEdited" | "locked" | "createdAt" | "updatedAt"
@@ -108,7 +113,7 @@ function shouldRetryWithoutResponseFormat(status: number, body: string): boolean
   );
 }
 
-async function callJsonLLM<T>(prompt: string, payload: unknown): Promise<T> {
+export async function callJsonLLM<T>(prompt: string, payload: unknown): Promise<T> {
   const config = llmConfig();
 
   const request = async (retry: boolean, includeResponseFormat: boolean): Promise<T> => {
@@ -258,6 +263,49 @@ Rules:
     }
     throw error;
   }
+}
+
+function normalizeTranslation(value: SummaryTranslationResult): SummaryTranslationResult {
+  return {
+    summaryKo: asString(value.summaryKo).slice(0, 5000),
+    shortSummaryKo: asString(value.shortSummaryKo).slice(0, 800)
+  };
+}
+
+export async function translatePaperSummaryToKorean(params: {
+  title: string;
+  summary: string;
+  shortSummary: string;
+  keywords: string[];
+}): Promise<SummaryTranslationResult> {
+  const prompt = `You are a careful Korean translator for ML/NLP research presentations.
+
+Translate the given paper summary into natural Korean.
+Return only valid JSON. Do not include markdown.
+
+Required JSON schema:
+{
+  "summaryKo": string,
+  "shortSummaryKo": string
+}
+
+Translation policy:
+- Use Korean for general technical terms when the Korean version is natural and widely used.
+- Keep proper nouns, model names, dataset names, benchmark names, paper-specific method names, and terms commonly used as-is in English.
+- Examples to preserve in English when they appear as names or established methods: Chain-of-Thought, ReAct, RAG, DPR, GPT-3, LLaMA, QLoRA, Gemini, Transformer, RLHF, LoRA.
+- Examples that may be translated naturally depending on context: retrieval -> 검색, generation -> 생성, embedding -> 임베딩, fine-tuning -> 파인튜닝, reinforcement learning -> 강화학습, quantization -> 양자화.
+- Do not over-translate technical phrases in a way that sounds unnatural in Korean research presentations.
+- Keep the meaning faithful. Do not add new claims.
+- summaryKo should be 3 to 5 Korean sentences.
+- shortSummaryKo should be 1 Korean sentence.`;
+
+  const result = await callJsonLLM<SummaryTranslationResult>(prompt, {
+    title: params.title,
+    summary: params.summary,
+    shortSummary: params.shortSummary,
+    keywords: params.keywords
+  });
+  return normalizeTranslation(result);
 }
 
 export async function extractRelationsWithLLM(params: {

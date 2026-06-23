@@ -45,6 +45,9 @@ export type PaperNode = {
   abstract?: string;
   summary: string;
   shortSummary: string;
+  summaryKo?: string;
+  shortSummaryKo?: string;
+  translationUpdatedAt?: string;
   keywords: string[];
   embeddingText: string;
   localFileId?: string;
@@ -89,6 +92,40 @@ export type EdgeSuggestion = {
   confidence: number;
   status: "pending" | "accepted" | "rejected";
   createdAt: string;
+};
+
+export type GraphChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type ChatProposedAction =
+  | {
+      id: string;
+      type: "update_edge";
+      reason: string;
+      edgeId: string;
+      patch: Pick<PaperEdge, "relationType" | "label" | "shortDescription" | "longDescription">;
+    }
+  | {
+      id: string;
+      type: "create_edge";
+      reason: string;
+      input: {
+        source: string;
+        target: string;
+        directed: boolean;
+        directionMeaning?: DirectionMeaning;
+        relationType: RelationType;
+        label: string;
+        shortDescription: string;
+        longDescription: string;
+      };
+    };
+
+export type GraphChatResult = {
+  answer: string;
+  proposedActions: ChatProposedAction[];
 };
 
 export type AnalysisSettings = {

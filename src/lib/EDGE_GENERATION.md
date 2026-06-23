@@ -1,7 +1,6 @@
 # Edge Generation Logic
 
-This app creates automatic paper relationships only when a new PDF is uploaded.
-Changing the settings does not rewrite existing nodes, edges, or suggestions.
+This app creates automatic paper relationships when a new PDF is uploaded. Users can also manually refresh existing generated edges from the current settings. Saving settings alone does not rewrite existing nodes, edges, or suggestions.
 
 ## Pipeline
 
@@ -16,6 +15,29 @@ Changing the settings does not rewrite existing nodes, edges, or suggestions.
 5. Ask the LLM to compare the new paper with candidate paper summaries and return relationship JSON.
 6. Validate the LLM response.
 7. Merge valid results into `graph.json` as edges or suggestions.
+
+
+## Manual Refresh Existing Graph
+
+The UI can call:
+
+```http
+POST /api/projects/:projectId/edges/refresh
+```
+
+This endpoint uses `refreshGeneratedEdges` in `refresh-edges.ts`.
+
+Refresh behavior:
+
+- preserve user-created and user-edited edges;
+- remove generated edges from the current graph;
+- clear old suggestions;
+- replay papers in `createdAt` order;
+- select candidates from papers already replayed;
+- call the configured LLM only for selected candidate pairs;
+- merge results through the same validation and merge rules used by upload analysis.
+
+Because refresh can trigger multiple LLM calls, the UI exposes it as an explicit button rather than running it automatically whenever settings change.
 
 ## Candidate Selection
 
@@ -100,7 +122,7 @@ persist in either local storage or Google Drive depending on `STORAGE_BACKEND`.
 Users can edit the same settings in the app:
 
 ```text
-left sidebar -> Settings -> Edge generation details -> more
+left sidebar -> Settings -> Edge generation details -> more / Refresh Edges
 ```
 
 This is intentionally JSON-backed rather than YAML-backed so the app can store

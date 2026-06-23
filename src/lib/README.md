@@ -14,6 +14,9 @@ This folder contains domain logic and server-side helpers. UI components and rou
 - `analyze.ts`
   - End-to-end PDF upload analysis pipeline.
   - Reads project `analysisSettings` before candidate selection and relation extraction.
+- `refresh-edges.ts`
+  - Manual generated-edge refresh for existing graphs.
+  - Preserves user-controlled edges and reuses candidate selection, LLM relation extraction, and merge rules.
 - `pdf.ts`
   - Extracts text from PDF buffers with either local `pdf-parse` or Upstage Document Parse.
 - `llm.ts`
@@ -47,6 +50,20 @@ save PDF
 -> write graph
 ```
 
+
+## Manual Refresh Pipeline
+
+```text
+read graph
+-> keep user-created/user-edited edges
+-> remove generated edges and suggestions
+-> replay existing papers in createdAt order
+-> read project analysisSettings
+-> select candidate papers from the replayed set
+-> extract relations with LLM
+-> merge without overwriting user edits
+-> write graph
+```
 ## Important Invariants
 
 - Do not overwrite user-edited edges.
@@ -56,12 +73,12 @@ save PDF
 - Do not store raw React Flow objects in `graph.json`.
 - Paper node deletion removes graph nodes, connected edges, related suggestions, and saved node position only.
 - Original PDF files are intentionally preserved when deleting a paper node.
-- `analysisSettings` changes affect future uploads only.
+- `analysisSettings` changes affect future uploads by default; existing generated edges change only through explicit refresh, which must preserve user-created and user-edited edges.
 
 ## Where To Change Things
 
 - Add a new LLM provider in `llm.ts`.
 - Add a new PDF parser in `pdf.ts`.
 - Add a new storage backend by implementing `StorageAdapter`.
-- Change automatic edge rules in `EDGE_GENERATION.md`, `types.ts`, `candidates.ts`, `llm.ts`, and `merge.ts`.
+- Change automatic edge rules in `EDGE_GENERATION.md`, `types.ts`, `candidates.ts`, `llm.ts`, `merge.ts`, and `refresh-edges.ts`.
 - Change graph mutation safety rules in `merge.ts` and `graph-validation.ts`.

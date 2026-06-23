@@ -32,7 +32,7 @@ Implemented features:
 - Persisted graph UI settings in `graph.json`
 - Optional edge-label hiding for dense graphs
 - Curved edge paths with per-edge offsets for denser graphs
-- Free-move mode with persisted node positions
+- Free-move mode with real-time dragging and persisted final node positions
 - Node position reset
 - Large paper-list modal after the first 10 sidebar papers
 - Edge suggestion accept/reject endpoints
@@ -41,6 +41,7 @@ Implemented features:
 - Gemini metadata/summary/relation extraction through Google AI Studio's OpenAI-compatible API
 - Upstage Solar Pro 3 metadata/summary/relation extraction
 - Project-level edge generation settings persisted in `graph.json`
+- Manual Refresh Edges action that recomputes generated edges from current `analysisSettings` while preserving user-created and user-edited edges
 - Korean help modal opened from the bottom-right `도움말` button
 
 ## First Setup On Another PC
@@ -202,5 +203,5 @@ Look for:
 - Keep original PDFs when deleting graph paper nodes unless product requirements change.
 - Store graph UI preferences in `GraphData.uiSettings`, not in component-only state.
 - Store edge generation policy in `GraphData.analysisSettings`.
-- Treat `analysisSettings` changes as future-upload policy only.
+- Treat `analysisSettings` changes as future-upload policy by default; only the explicit Refresh Edges action should recompute existing generated edges, and it must preserve user-controlled edges.
 - Use the dense graph controls before changing the domain data model: hide edge labels, tune line styles, move nodes, or reset positions.

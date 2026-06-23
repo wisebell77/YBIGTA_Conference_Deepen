@@ -1,6 +1,10 @@
 import { Readable } from "stream";
 import type { EdgeSuggestion, PaperEdge, PaperNode, StoredFile } from "./types";
-import { extractPaperMetadataAndSummary, extractRelationsWithLLM } from "./llm";
+import {
+  extractPaperMetadataAndSummary,
+  extractRelationsWithLLM,
+  translatePaperSummaryToKorean
+} from "./llm";
 import { extractTextFromPdf, extractTextFromPdfStream } from "./pdf";
 import { mergeGraph } from "./merge";
 import { readOrCreateGraph, storage } from "./storage";
@@ -10,6 +14,7 @@ function createPaperNode(params: {
   metadata: Awaited<ReturnType<typeof extractPaperMetadataAndSummary>>;
   originalFilename: string;
   storedFile: Awaited<ReturnType<typeof storage.savePdf>>;
+  translation?: Awaited<ReturnType<typeof translatePaperSummaryToKorean>> | null;
 }): PaperNode {
   const timestamp = new Date().toISOString();
   return {
@@ -21,6 +26,9 @@ function createPaperNode(params: {
     abstract: params.metadata.abstract || undefined,
     summary: params.metadata.summary || "",
     shortSummary: params.metadata.shortSummary || params.metadata.summary?.slice(0, 160) || "",
+    summaryKo: params.translation?.summaryKo || undefined,
+    shortSummaryKo: params.translation?.shortSummaryKo || undefined,
+    translationUpdatedAt: params.translation?.summaryKo ? timestamp : undefined,
     keywords: params.metadata.keywords ?? [],
     embeddingText: params.metadata.embeddingText || params.metadata.summary || params.metadata.title,
     localFileId: params.storedFile.id,
@@ -105,10 +113,17 @@ async function analyzeStoredPaper(params: {
     originalFilename: params.originalFilename,
     storedFile: params.storedFile
   });
+  const translation = await translatePaperSummaryToKorean({
+    title: metadata.title,
+    summary: metadata.summary,
+    shortSummary: metadata.shortSummary,
+    keywords: metadata.keywords
+  }).catch(() => null);
   const newPaper = createPaperNode({
     metadata,
     originalFilename: params.originalFilename,
-    storedFile: params.storedFile
+    storedFile: params.storedFile,
+    translation
   });
   const graph = await readOrCreateGraph(params.projectId);
   const candidates = selectCandidatePapers({

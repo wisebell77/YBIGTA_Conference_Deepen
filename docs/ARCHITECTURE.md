@@ -48,6 +48,24 @@ Pipeline:
 9. Persist graph.
 ```
 
+
+## Manual Edge Refresh Pipeline
+
+Existing graphs are refreshed by:
+
+```text
+src/lib/refresh-edges.ts
+```
+
+`refreshGeneratedEdges(projectId)` reads the current graph, preserves user-created
+and user-edited edges, removes generated edges and suggestions, then replays papers
+in `createdAt` order. Each paper is compared only against papers processed earlier
+using the current `analysisSettings`, and the normal LLM relation extraction and
+`mergeGraph` rules are reused before the refreshed graph is written.
+
+This path is intentionally manual. Saving `analysisSettings` changes the future
+upload policy, but it does not trigger LLM calls until the user clicks Refresh Edges.
+
 ## Module Responsibilities
 
 ### `src/lib/types.ts`
@@ -83,6 +101,10 @@ Responsibilities:
 Owns Google OAuth and Google Drive storage behavior.
 
 Important point: the rest of the app should not call Drive APIs directly. It should use `StorageAdapter`.
+
+### `src/lib/refresh-edges.ts`
+
+Recomputes generated edges for an existing graph from the current `analysisSettings` while preserving user-created and user-edited edges. This module backs `POST /api/projects/:projectId/edges/refresh`.
 
 ### `src/lib/pdf.ts`
 
@@ -161,6 +183,7 @@ Responsibilities:
 - resize side panels
 - toggle node shape mode
 - edit edge generation settings
+- refresh existing generated edges from the current edge generation settings
 - open the Korean help modal
 - log out of the local Google Drive session
 

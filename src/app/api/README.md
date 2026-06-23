@@ -18,6 +18,7 @@ This folder contains server-only route handlers. These routes are the boundary b
   - Deletes paper nodes from graph memory without deleting source PDFs.
 - `projects/[projectId]/edges/*`
   - Creates, edits, and deletes user-controlled edges.
+  - Refreshes generated edges through `POST /api/projects/:projectId/edges/refresh`.
 - `projects/[projectId]/edge-suggestions/*`
   - Accepts or rejects LLM-generated suggestions.
 
@@ -30,6 +31,10 @@ This folder contains server-only route handlers. These routes are the boundary b
 - Return stable JSON envelopes such as `{ "success": true, ... }` or `{ "success": false, "error": "..." }`.
 - Do not expose API keys, OAuth tokens, or raw provider errors to the browser.
 
+
+## Manual Edge Refresh Contract
+
+`POST /api/projects/:projectId/edges/refresh` is the explicit path for applying current `analysisSettings` to existing papers. It preserves user-created and user-edited edges, removes generated edges, clears suggestions, recomputes generated relations with the configured LLM, writes `graph.json`, and returns refresh stats.
 ## Settings Persistence
 
 `PATCH /api/projects/:projectId/graph` is the shared settings persistence route.

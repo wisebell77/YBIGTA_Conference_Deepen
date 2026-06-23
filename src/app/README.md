@@ -13,7 +13,7 @@ This folder contains the Next.js App Router entry points.
 - `globals.css`
   - Global Tailwind layers and app-wide base styling.
 - `api/`
-  - Route handlers for graph data, PDF upload/analysis, edge editing, and Google OAuth.
+  - Route handlers for graph data, PDF upload/analysis, edge editing/refresh, and Google OAuth.
 
 ## Boundaries
 

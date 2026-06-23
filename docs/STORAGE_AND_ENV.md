@@ -150,7 +150,7 @@ Each project's `graph.json` stores:
 - `uiSettings` for graph appearance and layout;
 - `analysisSettings` for automatic edge generation policy.
 
-`analysisSettings` is intentionally project-scoped. Changing it from the UI changes future upload behavior only. Existing nodes, edges, and suggestions are not rewritten.
+`analysisSettings` is intentionally project-scoped. Changing it from the UI changes future upload behavior by default. Existing nodes, edges, and suggestions are not rewritten until the user explicitly runs Refresh Edges; that refresh preserves user-created and user-edited edges while recomputing generated edges.
 
 ## Backup Behavior
 

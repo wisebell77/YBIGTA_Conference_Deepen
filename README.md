@@ -141,7 +141,7 @@ Copies demo PDFs from `../data_papers` into `local_data/projects/demo-project/pa
 - Duplicate-looking uploads warn before analysis instead of silently creating another node.
 - React Flow custom nodes must keep source/target handles or edges can disappear.
 - UI preferences and edge generation settings are persisted in `graph.json`.
-- Edge generation settings apply only to future uploads.
+- Edge generation settings apply to future uploads by default; use Refresh Edges to recalculate existing generated edges with the current policy while preserving user-created and user-edited edges.
 
 ## Project Map
 
@@ -159,6 +159,7 @@ src/lib/graph-validation.ts
                           Validation and normalization of LLM relation output
 src/lib/merge.ts          Incremental merge rules
 src/lib/analyze.ts        End-to-end upload analysis pipeline
+src/lib/refresh-edges.ts  Manual generated-edge refresh pipeline for existing graphs
 scripts/                  Local maintenance and demo seeding scripts
 docs/                     Handoff and architecture documentation
 ```

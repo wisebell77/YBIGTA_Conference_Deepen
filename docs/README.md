@@ -48,4 +48,4 @@ This folder is the handoff packet for collaborators. It explains what has been b
 - Production can use Gemini or Upstage for LLM analysis, depending on `LLM_PROVIDER`.
 - Upstage Document Parse remains the recommended parser for OCR/layout-heavy PDFs.
 - Vercel deployments must use Postgres-backed OAuth token/session storage.
-- Edge generation settings are project settings and apply only to future uploads.
+- Edge generation settings are project settings for future uploads by default; existing generated edges change only through the explicit Refresh Edges action.

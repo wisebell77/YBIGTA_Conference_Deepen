@@ -162,8 +162,9 @@ Defaults:
 }
 ```
 
-These settings are project policy for future uploads. Updating them should not
-rewrite existing nodes, edges, or suggestions.
+These settings are project policy for future uploads by default. Updating them
+should not rewrite existing nodes, edges, or suggestions unless the user explicitly
+runs Refresh Edges, which recomputes generated edges from the current settings.
 
 ## GraphUiSettings
 
@@ -208,6 +209,16 @@ Rules:
 
 For undirected edges, reversed source/target should be treated as the same pair.
 
+
+## Refresh Invariants
+
+Manual generated-edge refresh uses the same `GraphData` shape but a different mutation path:
+
+- User-controlled edges are preserved if `userEdited=true` or `relationSource` is `user_created` / `user_edited`.
+- Generated edges are removed before recomputation.
+- Existing suggestions are cleared and regenerated from the current policy.
+- Paper nodes and original PDFs are not re-parsed or rewritten.
+- Relation extraction is replayed over existing paper metadata in creation order.
 ## Deletion Rules
 
 Edge deletion removes only the edge and suggestions that target that edge.

@@ -84,8 +84,9 @@ Behavior:
 - stores edge generation settings in `graph.json`
 - returns the updated graph
 
-Analysis settings are read only when a new paper is analyzed. Updating them does
-not retroactively rewrite existing nodes, edges, or suggestions.
+Analysis settings are read automatically when a new paper is analyzed. Updating them does
+not rewrite existing graph data by itself. To apply the current settings to existing
+papers, the UI must explicitly call the generated-edge refresh endpoint.
 
 ## Papers
 
@@ -297,6 +298,38 @@ Behavior:
 - removes suggestions targeting that edge
 - writes graph
 - does not modify source paper nodes or PDFs
+
+### Refresh generated edges
+
+```http
+POST /api/projects/:projectId/edges/refresh
+```
+
+Behavior:
+
+- reads the current graph and `analysisSettings`
+- preserves user-controlled edges (`userEdited=true`, `user_created`, or `user_edited`)
+- removes generated edges and clears previous suggestions before recomputing
+- replays existing papers in `createdAt` order and compares each paper only with previously processed candidates
+- calls the configured LLM for selected candidate pairs, so this endpoint can incur provider cost
+- writes the refreshed graph
+- returns updated graph data and refresh stats
+
+Response:
+
+```json
+{
+  "success": true,
+  "graph": {},
+  "stats": {
+    "paperCount": 10,
+    "preservedUserEdges": 2,
+    "removedGeneratedEdges": 12,
+    "generatedEdges": 9,
+    "pendingSuggestions": 3
+  }
+}
+```
 
 ## Edge Suggestions
 

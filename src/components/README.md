@@ -27,6 +27,7 @@ Responsibilities:
 - configure relation edge colors from the left sidebar;
 - hide/show edge label pills from the settings panel;
 - configure automatic edge generation from the settings detail modal;
+- refresh existing generated edges from the current edge generation settings;
 - toggle node free-move mode and persist node positions;
 - accept/reject suggestions;
 - warn before uploading a likely duplicate PDF.
@@ -41,6 +42,8 @@ Important pieces:
 - `relationColors`
 - `saveUiSettings`
 - `saveNodePosition`
+- `refreshGeneratedEdges`
+- `flowNodes` / `onNodesChange`
 - `resetNodePositions`
 - `relationLineStyles`
 - `findPotentialDuplicate`
@@ -75,7 +78,7 @@ Both are saved through:
 PATCH /api/projects/:projectId/graph
 ```
 
-`analysisSettings` is intentionally applied only during future upload analysis. Changing it should not mutate existing graph data.
+`analysisSettings` is applied automatically during future upload analysis. Changing it should not mutate existing graph data unless the user explicitly clicks Refresh Edges, which recomputes generated edges while preserving user-controlled edges.
 
 ## Help UX
 

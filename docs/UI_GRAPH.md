@@ -102,11 +102,11 @@ Settings:
 - edge label visibility: hide labels when they overlap in dense graphs;
 - free move mode: enables React Flow node dragging;
 - node position reset: clears saved node coordinates;
-- edge generation details: opens a modal for candidate scoring, confidence thresholds, and custom edge prompt policy.
+- edge generation details: opens a modal for candidate scoring, confidence thresholds, custom edge prompt policy, and the manual Refresh Edges action.
 
-When free move mode is enabled, dragging a node saves its final position into `graph.json` under `uiSettings.nodePositions`.
+When free move mode is enabled, React Flow node changes update local canvas state in real time during drag. Drag stop saves the final position into `graph.json` under `uiSettings.nodePositions` without replacing the local graph from the server response, so the node should not snap after release.
 
-Edge generation settings are saved under `analysisSettings`. They apply only when a new paper is uploaded and analyzed.
+Edge generation settings are saved under `analysisSettings`. They apply automatically when a new paper is uploaded and analyzed. Existing generated edges are recalculated only when the user clicks Refresh Edges in the settings modal; user-created and user-edited edges are preserved.
 
 ## Help Modal
 
