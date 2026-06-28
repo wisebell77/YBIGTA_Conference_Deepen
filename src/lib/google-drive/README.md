@@ -1,5 +1,13 @@
 # `src/lib/google-drive` Module Notes
 
+> **이 폴더는 무엇인가요?**
+> Google OAuth 인증, Drive 클라이언트, Drive 기반 저장소 어댑터를 담당합니다. `STORAGE_BACKEND=google_drive`일 때 PDF와 `graph.json`이 사용자의 Google Drive에 저장되도록 합니다.
+>
+> **다른 폴더와의 관계**
+> - 상위 [`src/lib`](../README.md)가 정의한 `StorageAdapter` 계약을 Drive용으로 구현합니다. 그래서 로컬 모드와 Drive 모드를 바꿔도 분석/UI 코드는 그대로입니다.
+> - [`src/app/api/auth/google/*`](../../app/api/README.md) 라우트가 이 폴더의 `auth.ts` / `auth-store.ts`를 사용해 OAuth 흐름을 처리합니다.
+> - 다른 모듈은 Google API를 직접 호출하지 않고 반드시 이 폴더를 거칩니다. OAuth 토큰은 절대 클라이언트로 노출되지 않습니다.
+
 This folder owns Google OAuth, Drive clients, and Drive-backed storage. Other modules should not call Google APIs directly.
 
 ## Files

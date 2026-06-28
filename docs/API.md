@@ -62,12 +62,12 @@ Body:
   },
   "analysisSettings": {
     "candidateLimitPerNewPaper": 8,
-    "candidateTitleWeight": 2,
-    "candidateKeywordWeight": 3,
-    "candidateSummaryWeight": 1,
-    "candidateMinScore": 0.05,
+    "candidateTitleWeight": 0.2,
+    "candidateKeywordWeight": 0.5,
+    "candidateSummaryWeight": 0.3,
+    "candidateMinScore": 0,
     "includeZeroScoreCandidates": true,
-    "minConfidenceForAutoEdge": 0.72,
+    "minConfidenceForAutoEdge": 0.68,
     "minConfidenceForSuggestion": 0.45,
     "customEdgePrompt": ""
   }
@@ -197,6 +197,28 @@ application/pdf
 In local mode, `fileId` is `PaperNode.localFileId`.
 
 In Google Drive mode, it maps to the Drive file id through the storage adapter.
+
+### Translate paper summary to Korean
+
+```http
+POST /api/projects/:projectId/papers/:fileId/translate-summary
+```
+
+Behavior:
+
+- finds the paper node by id
+- if `summaryKo` and `shortSummaryKo` already exist, returns them without calling the LLM
+- otherwise calls the LLM to translate `summary` / `shortSummary` into Korean
+- stores `summaryKo`, `shortSummaryKo`, and `translationUpdatedAt` in `graph.json`
+- returns the updated paper and graph
+
+```json
+{
+  "success": true,
+  "paper": {},
+  "graph": {}
+}
+```
 
 ### Delete paper node
 
@@ -390,3 +412,54 @@ POST /api/auth/google/logout
 ```
 
 Clears stored auth credentials.
+
+## Chat
+
+### Graph chatbot
+
+```http
+POST /api/projects/:projectId/chat
+Content-Type: application/json
+```
+
+Body:
+
+```json
+{
+  "messages": [
+    { "role": "user", "content": "이 그래프에서 RAG와 가장 관련 깊은 논문은?" }
+  ]
+}
+```
+
+Behavior:
+
+- requires a non-empty `messages` array whose last entry has `role: "user"` (otherwise `400 USER_MESSAGE_REQUIRED`)
+- reads the current graph and builds a read-only chat context
+- calls the LLM and returns a Korean answer plus optional proposed edge actions
+- never mutates `graph.json`; proposed actions are applied only after the user approves them through the normal edge routes
+
+Response:
+
+```json
+{
+  "success": true,
+  "answer": "한국어 답변",
+  "proposedActions": [
+    {
+      "id": "chat_action_xxx",
+      "type": "create_edge",
+      "reason": "한국어 근거",
+      "input": {
+        "source": "paper_a",
+        "target": "paper_b",
+        "directed": true,
+        "relationType": "custom",
+        "label": "관계 라벨",
+        "shortDescription": "짧은 설명",
+        "longDescription": "자세한 설명"
+      }
+    }
+  ]
+}
+```

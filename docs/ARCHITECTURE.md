@@ -118,6 +118,7 @@ Calls the LLM for:
 
 - paper metadata and summary
 - paper-to-paper relation extraction
+- Korean translation of an existing paper summary (`translatePaperSummaryToKorean`)
 
 `LLM_PROVIDER=gemini` uses Google AI Studio through Gemini's OpenAI-compatible API.
 `LLM_PROVIDER=upstage` uses Solar through Upstage's OpenAI-compatible Chat API.
@@ -126,6 +127,16 @@ also contains fallback behavior for local development when no provider key is pr
 
 Project-specific edge policy from `analysisSettings.customEdgePrompt` is appended
 to the base relation extraction prompt.
+
+### `src/lib/chat.ts`
+
+Backs the graph-aware chatbot (`POST /api/projects/:projectId/chat`).
+
+It builds a read-only context from the current graph (papers, edges, pending
+suggestions), asks the LLM for a Korean answer, and may return proposed edge
+actions (`update_edge` / `create_edge`). This module never mutates `graph.json`
+itself: proposed actions are returned to the UI and only applied through the
+normal edge API routes after the user approves them.
 
 ### `src/lib/candidates.ts`
 
@@ -185,6 +196,8 @@ Responsibilities:
 - edit edge generation settings
 - refresh existing generated edges from the current edge generation settings
 - open the Korean help modal
+- open the graph chatbot and apply chatbot-proposed edge actions after user approval
+- translate a selected paper's English summary to Korean
 - log out of the local Google Drive session
 
 ### `src/components/PaperNode.tsx`

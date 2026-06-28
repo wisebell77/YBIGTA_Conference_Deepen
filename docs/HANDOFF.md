@@ -43,6 +43,8 @@ Implemented features:
 - Project-level edge generation settings persisted in `graph.json`
 - Manual Refresh Edges action that recomputes generated edges from current `analysisSettings` while preserving user-created and user-edited edges
 - Korean help modal opened from the bottom-right `도움말` button
+- Graph-aware chatbot (`챗봇` button) that reads graph context and answers in Korean; it can propose edge updates/creations that are applied only after explicit user approval
+- On-demand Korean translation of a paper's English summary, cached in `graph.json`
 
 ## First Setup On Another PC
 

@@ -1,5 +1,12 @@
 # Documentation Index
 
+> **이 폴더는 무엇인가요?**
+> 협업자를 위한 인수인계 문서 묶음입니다. 무엇이 만들어졌는지, 모듈들이 어떻게 맞물리는지, 데이터가 어떻게 저장되는지, 반드시 지켜야 할 구현 규칙이 무엇인지를 설명합니다.
+>
+> **다른 폴더와의 관계**
+> - 루트 [`README.md`](../README.md)가 빠른 시작 안내라면, 이 폴더는 더 깊은 설계 설명을 담습니다.
+> - 각 코드 폴더(`src/app`, `src/components`, `src/lib` 등)의 README로 연결되는 색인 역할도 합니다.
+
 This folder is the handoff packet for collaborators. It explains what has been built, how the modules fit together, how data is stored, and which implementation rules must be preserved.
 
 ## Read In This Order
@@ -49,3 +56,4 @@ This folder is the handoff packet for collaborators. It explains what has been b
 - Upstage Document Parse remains the recommended parser for OCR/layout-heavy PDFs.
 - Vercel deployments must use Postgres-backed OAuth token/session storage.
 - Edge generation settings are project settings for future uploads by default; existing generated edges change only through the explicit Refresh Edges action.
+- The graph chatbot never mutates `graph.json` directly; it only returns proposed edge actions that the user must approve.

@@ -63,6 +63,30 @@ The Google Drive adapter should keep the same project layout concept:
         graph.json
 ```
 
+## OAuth Token / Session Storage
+
+Where Google OAuth tokens and sessions are stored depends on `DATABASE_URL`:
+
+```env
+# Local development (no Postgres): file-based store
+GOOGLE_AUTH_FILE=./local_data/tokens/google-auth.json
+
+# Shared deployments (Vercel etc.): Postgres-backed store
+DATABASE_URL=postgresql://user:password@host:5432/db
+DATABASE_SSL=true
+```
+
+When `DATABASE_URL` is set, the app creates and uses `deepen_users`,
+`deepen_google_tokens`, and `deepen_sessions` tables, so each teammate's browser
+session is tied to its own Google account. When `DATABASE_URL` is empty, the file
+store in `GOOGLE_AUTH_FILE` is used instead.
+
+> Note on Vercel + Neon: the Vercel ↔ Neon integration auto-injects many Postgres
+> variables (`POSTGRES_URL`, `POSTGRES_URL_NON_POOLING`, `PGHOST`, `PGUSER`,
+> `PGPASSWORD`, `NEON_PROJECT_ID`, and so on). This app only reads `DATABASE_URL`
+> and `DATABASE_SSL`, so the other Neon/Postgres variables can be ignored and are
+> not needed for local development.
+
 ## LLM Settings
 
 The app can use Gemini, Upstage, or an OpenAI-compatible endpoint. The selected provider is used for metadata extraction, summary generation, and automatic relation extraction.
@@ -144,7 +168,7 @@ Do not couple API routes or UI components directly to local filesystem or Google
 
 Each project's `graph.json` stores:
 
-- paper nodes;
+- paper nodes (including any cached Korean summary translation: `summaryKo` / `shortSummaryKo`);
 - paper edges;
 - edge suggestions;
 - `uiSettings` for graph appearance and layout;

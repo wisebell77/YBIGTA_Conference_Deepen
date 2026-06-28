@@ -35,6 +35,9 @@ type PaperNode = {
   abstract?: string;
   summary: string;
   shortSummary: string;
+  summaryKo?: string;
+  shortSummaryKo?: string;
+  translationUpdatedAt?: string;
   keywords: string[];
   embeddingText: string;
   localFileId?: string;
@@ -52,6 +55,7 @@ Rules:
 - Node type is always `paper`.
 - No concept/method/dataset nodes in MVP.
 - `summary`, `shortSummary`, `keywords`, and `embeddingText` are graph memory, not just UI copy.
+- `summaryKo` / `shortSummaryKo` cache the on-demand Korean translation of the summary; they are written by the translate-summary route and reused so the LLM is not called again. `translationUpdatedAt` records when the translation was produced.
 - `localFileId` is used by the local PDF route.
 - `driveFileId` and `webViewLink` are for Google Drive mode.
 
@@ -128,6 +132,50 @@ type EdgeSuggestion = {
 
 Suggestions are used when LLM output should not directly overwrite existing graph memory.
 
+## Chat Types (transient)
+
+These types back the graph chatbot. They are request/response shapes only and are
+**not** stored in `graph.json`.
+
+```ts
+type GraphChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+type ChatProposedAction =
+  | {
+      id: string;
+      type: "update_edge";
+      reason: string;
+      edgeId: string;
+      patch: Pick<PaperEdge, "relationType" | "label" | "shortDescription" | "longDescription">;
+    }
+  | {
+      id: string;
+      type: "create_edge";
+      reason: string;
+      input: {
+        source: string;
+        target: string;
+        directed: boolean;
+        directionMeaning?: DirectionMeaning;
+        relationType: RelationType;
+        label: string;
+        shortDescription: string;
+        longDescription: string;
+      };
+    };
+
+type GraphChatResult = {
+  answer: string;
+  proposedActions: ChatProposedAction[];
+};
+```
+
+A proposed action only becomes real graph data after the user approves it, at which
+point the UI calls the normal edge create/update API routes.
+
 ## AnalysisSettings
 
 ```ts
@@ -151,16 +199,18 @@ Defaults:
 {
   semanticEdgeLimitPerPaper: 5,
   candidateLimitPerNewPaper: 8,
-  candidateTitleWeight: 2,
-  candidateKeywordWeight: 3,
-  candidateSummaryWeight: 1,
-  candidateMinScore: 0.05,
-  includeZeroScoreCandidates: true,
-  minConfidenceForAutoEdge: 0.72,
+  minConfidenceForAutoEdge: 0.68,
   minConfidenceForSuggestion: 0.45,
+  candidateTitleWeight: 0.2,
+  candidateKeywordWeight: 0.5,
+  candidateSummaryWeight: 0.3,
+  candidateMinScore: 0,
+  includeZeroScoreCandidates: true,
   customEdgePrompt: ""
 }
 ```
+
+These mirror `DEFAULT_ANALYSIS_SETTINGS` in `src/lib/types.ts`; update both together if the defaults change.
 
 These settings are project policy for future uploads by default. Updating them
 should not rewrite existing nodes, edges, or suggestions unless the user explicitly
